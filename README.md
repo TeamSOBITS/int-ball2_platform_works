@@ -7,7 +7,7 @@
 以下はすべてローカルで行います。
 1. `ローカル`でシム内の`shared_data_sim`配下に本リポジトリをclone
 
-2. 各サブモジュールをcloneする(入ってなければ)
+2. `user_programs` まで `cd`して、各サブモジュールをcloneする(初回のみ)
     - YOLO, Depth Anything V2, intball2_commomなど
     ```sh
     git submodule update --init --recursive
@@ -69,6 +69,24 @@
             sudo mount --bind /home/rg-msi-03/int-ball2_simulator/int-ball2_simulator_docker/shared_data_sim /home/space-ros/int-ball2_simulator/int-ball2_simulator_docker/shared_data_sim
             ```
 
+## 現段階でGSEからの起動確認できているプログラム
+- iss_static_map_server.launch
+- location_broadcaster.py
+
+## 要確認
+- depth_anything_v2.launch
+    - cudaがfalseになりエラー落ちの可能性高
+    - compose.yml経由では起動確認済み
+- yolo.launch
+    - cudaがfalseになりエラー落ちの可能性高
+- gnc.launch
+    - マップ配信、Tf配信、深度推定
+- gnc_manager.py
+    - Target TFをmain内に書き込み、地点配信や地図配信も
+- run_competition.py
+    - メインステート, 各launchは他ターミナルで起動の必要あり
+- main.launch
+    - すべて
 
 ## Overview
 Technology Demonstration Platform S/W for Int-ball2.
