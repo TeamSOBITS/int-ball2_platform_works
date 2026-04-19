@@ -1,32 +1,58 @@
 # Platform Works
 
+競技用Docker Image作成用リポジトリです
+
+
 ## インストール方法
-
-1. `shared_data_sim`配下に本リポジトリをcloneし、以下の階層に`cd`で移動
-
-```sh
-int-ball2_platform_works/platform_docker/sample_tests
-```
+以下はすべてローカルで行います。
+1. `ローカル`でシム内の`shared_data_sim`配下に本リポジトリをclone
 
 2. 各サブモジュールをcloneする(入ってなければ)
-    - YOLO, Depth Anything V2, intball2_commom
+    - YOLO, Depth Anything V2, intball2_commomなど
+    ```sh
+    git submodule update --init --recursive
+    ```
+3. サブモジュールを最新の状態に更新する場合、`user_programs` まで `cd`して以下のコマンド
+    ```sh
+    git submodule update --remote intball2_common
+    ```
+4. 以下の階層に`cd`で移動
 
-3. Depth Anything V2のモデルをダウンロードし適切な場所に配置
+    ```sh
+    int-ball2_platform_works/platform_docker/sample_tests
+    ```
+5. Depth Anything V2のモデルをダウンロードし適切な場所(intball2_common/intball_programs/config)に配置
 
+6. 以下のコマンドでイメージをビルド
+    ```bash
+    docker build . -t ib2_user:0.1
+    ```
 
-その後、以下のコマンドでイメージをビルド
-```bash
-docker build . -t ib2_user:0.1
-```
+**コードを更新する場合、手順3から実行6まで実行してください**
 
-- GSEからではなく、ローカルのターミナルから起動する場合
+## 実行・操作方法
+- GSEからではなく、ローカルのターミナルから起動する場合(**デバッグ用**)
     ```sh
     docker compose down
     PWD=$(pwd) docker compose up -d
     ```
+    起動後はコンテナ内で以下を実行
+    ```sh
+    source /opt/ros/noetic/setup.bash
+    source ~/catkin_ws/devel/setup.bash
+    ```
+    - シムからのTopicなどが受信できない場合は以下を実行(URIはシム側に合わせる)
+        ```sh
+        unset ROS_HOSTNAME
+        export ROS_MASTER_URI=http://172.17.0.1:11311
+        export ROS_IP=$(hostname -I | awk '{print $1}')
+        ```
 - GSEから起動する場合
     - コンテナ実行時に`sample_tests/scripts/cmd.sh`に記述されている内容が起動されます
     - 内容をGSEでStartボタン押したときに起動したいプログラムへのコマンドへ変更してください
+    - おそらくroot権限で実行しています
+    - Startボタンでコンテナ作成、Stopボタンでコンテナ削除しています
+         - StopせずにGSE終了させるとコンテナが残るため、次回起動時にStartでエラーでます
 
 ## トラブルシューティング
 
@@ -42,6 +68,8 @@ docker build . -t ib2_user:0.1
             ```sh
             sudo mount --bind /home/rg-msi-03/int-ball2_simulator/int-ball2_simulator_docker/shared_data_sim /home/space-ros/int-ball2_simulator/int-ball2_simulator_docker/shared_data_sim
             ```
+
+
 ## Overview
 Technology Demonstration Platform S/W for Int-ball2.
 
