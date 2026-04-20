@@ -31,6 +31,38 @@
 **コードを更新する場合、手順3から実行6まで実行してください**
 
 ## 実行・操作方法
+
+- GPUを使用する場合は、コンテナ起動前に以下を実行してください
+    1. `/etc/docker/daemon.json`を書き換えて`default-runtime`を変更する
+        ```sh
+        sudo nano /etc/docker/daemon.json
+        ```
+
+        エディタが開くため、内容を以下に書き換えてください
+        ```
+        {
+            "default-runtime": "nvidia",
+            "runtimes": {
+                "nvidia": {
+                    "args": [],
+                    "path": "nvidia-container-runtime"
+                }
+            }
+        }
+        ```
+        - 保存: Ctrl + O （オー）を押す。
+        - 確定: 下にファイル名が出ますので、そのまま Enter を押す。
+        - 終了: Ctrl + X を押してエディタを閉じる。
+    2. Dockerサービスを再起動する
+        ```sh
+        sudo systemctl restart docker
+        ```
+    3. 設定が正しく読み込まれたか確認します。
+        ```sh
+        docker info | grep "Default Runtime"
+        ```
+        - 出力が Default Runtime: nvidia になっていればよい
+
 - GSEからではなく、ローカルのターミナルから起動する場合(**デバッグ用**)
     ```sh
     docker compose down
@@ -53,6 +85,13 @@
     - おそらくroot権限で実行しています
     - Startボタンでコンテナ作成、Stopボタンでコンテナ削除しています
          - StopせずにGSE終了させるとコンテナが残るため、次回起動時にStartでエラーでます
+    - GPU使用時はｍ起動後にコンテナ内で以下を実行し、GPUが使用できるか確認してください
+        ```sh
+        nvidia-smi
+        ```
+        ```sh
+        python3 -c "import torch; print(torch.cuda.is_available())"
+        ```
 
 ## トラブルシューティング
 

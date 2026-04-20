@@ -47,7 +47,8 @@ RUN pip3 install \
 
 # 4. 環境変数の設定
 ENV LD_LIBRARY_PATH=/opt/ros/noetic/lib:/root/.local/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=all
 ############################# User packages build ##############################
 RUN mkdir -p /root/catkin_ws/src
 COPY user_programs /root/catkin_ws/src/user_programs
