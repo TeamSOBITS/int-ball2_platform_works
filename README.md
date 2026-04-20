@@ -111,15 +111,11 @@
 ## 現段階でGSEからの起動確認できているプログラム
 - iss_static_map_server.launch
 - location_broadcaster.py
+- depth_anything_v2.launch
+- yolo.launch
+- gnc.launch
 
 ## 要確認
-- depth_anything_v2.launch
-    - cudaがfalseになりエラー落ちの可能性高
-    - compose.yml経由では起動確認済み
-- yolo.launch
-    - cudaがfalseになりエラー落ちの可能性高
-- gnc.launch
-    - マップ配信、Tf配信、深度推定
 - gnc_manager.py
     - Target TFをmain内に書き込み、地点配信や地図配信も
 - run_competition.py
