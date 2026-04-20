@@ -22,6 +22,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     ros-noetic-pcl-ros \
     ros-noetic-nodelet \
     ros-noetic-gazebo-msgs \
+    ros-noetic-smach \
+    ros-noetic-smach-ros \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. 既存Pythonライブラリ（キャッシュ維持）
