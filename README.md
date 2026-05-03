@@ -82,7 +82,6 @@
 - GSEから起動する場合
     - コンテナ実行時に`sample_tests/scripts/cmd.sh`に記述されている内容が起動されます
     - 内容をGSEでStartボタン押したときに起動したいプログラムへのコマンドへ変更してください
-    - おそらくroot権限で実行しています
     - Startボタンでコンテナ作成、Stopボタンでコンテナ削除しています
          - StopせずにGSE終了させるとコンテナが残るため、次回起動時にStartでエラーでます
     - GPU使用時はｍ起動後にコンテナ内で以下を実行し、GPUが使用できるか確認してください
@@ -96,32 +95,11 @@
 ## トラブルシューティング
 
 - GSEのStartボタンで起動しない場合、シムのコンテナのGAZEBO側のログを見てください
-    - cmd.shが見つからない
-    - cmd.shにあるコマンドが存在しないコマンド
-    - cmd.shで実行されたプログラムでエラーが発生した
+    - 起動しようとしている名前のdocker imageが存在しない
     - ユーザーコンテナが既に起動している
         - docker rm コンテナIDで消去の必要あり
-    - 起動時にホスト側の絶対パスが渡っていない or 存在しないパス
-        - shared_data_sim内にplatform_worksを配置する必要あり
-	    - バインドのコマンド
-            ```sh
-            sudo mount --bind /home/rg-msi-03/int-ball2_simulator/int-ball2_simulator_docker/shared_data_sim /home/space-ros/int-ball2_simulator/int-ball2_simulator_docker/shared_data_sim
-            ```
-
-## 現段階でGSEからの起動確認できているプログラム
-- iss_static_map_server.launch
-- location_broadcaster.py
-- depth_anything_v2.launch
-- yolo.launch
-- gnc.launch
-
-## 要確認
-- gnc_manager.py
-    - Target TFをmain内に書き込み、地点配信や地図配信も
-- run_competition.py
-    - メインステート, 各launchは他ターミナルで起動の必要あり
-- main.launch
-    - すべて
+    - cmd.shが見つからない
+    - cmd.shにあるコマンドが存在しない
 
 ## Overview
 Technology Demonstration Platform S/W for Int-ball2.
