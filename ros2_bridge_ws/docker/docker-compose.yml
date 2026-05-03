@@ -1,0 +1,41 @@
+services:
+  sobits-container:
+    env_file: .env
+    image: ${IMAGE_NAME}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USERNAME: ${USERNAME}
+        LOCAL_UID: ${LOCAL_UID}
+        LOCAL_GID: ${LOCAL_GID}
+        ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}
+    container_name: ${CONTAINER_NAME}
+    privileged: true
+    user: "${LOCAL_UID}:${LOCAL_GID}"
+    network_mode: host
+    ipc: host
+    shm_size: "1g"
+    stop_grace_period: 1s
+    command: sleep infinity
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PULSE_SERVER=unix:/run/user/${LOCAL_UID}/pulse/native
+      - ROS_MASTER_URI=http://172.17.0.1:11311
+      - ROS_IP=${ROS_IP}
+    devices:
+      - /dev/snd
+    volumes:
+      - ${XDG_RUNTIME_DIR}/pulse:/run/user/${LOCAL_UID}/pulse
+      - ../src:/home/${USERNAME}/colcon_ws/src
+      - /dev/bus/usb:/dev/bus/usb
+      - /etc/udev/rules.d/:/etc/udev/rules.d/
+      - /dev/serial/by-id/:/dev/serial/by-id/
+    group_add:
+      - adm
+      - audio
+      - sudo
+      - video
+      - dialout
+    stdin_open: true
+    tty: true

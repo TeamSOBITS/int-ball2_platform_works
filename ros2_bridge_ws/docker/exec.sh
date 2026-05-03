@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Load environment variables
+if [[ -f ".env" ]]; then
+  source .env
+else
+  echo ".env not found"; exit 1
+fi
+
+PROJECT_NAME=${CONTAINER_NAME}
+
+# Check if container is running
+if [ ! "$(docker ps -q -f name=${CONTAINER_NAME})" ]; then
+  echo "Container ${CONTAINER_NAME} is not running."
+  echo "Please run './up.sh' first to start the container."
+  exit 1
+fi
+
+echo "Entering container: ${CONTAINER_NAME}"
+docker compose -p ${PROJECT_NAME} exec -it --user ${USERNAME} sobits-container /bin/bash
