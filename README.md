@@ -88,10 +88,50 @@ int-ball2_simulatorとのROS2 bridgeのdocker imageを作成するためのリ�
     - 例: `ros2_bridge_ws` → `my_new_ws`
     - コンテナの名前が被らないようにしてください．
 2. Dockerfileからイメージをビルドします.
-    ```bash
-    $ cd {コンテナPATH}/docker
-    $ bash build.sh
-    ```
+
+#### ビルドモード
+
+`build.sh`は3つのビルドモードをサポートしています：
+
+- **`--pull`（デフォルト）**: 事前ビルドされたros1_baseイメージをghcr.ioからプルして使用します．最も高速です（推奨）．
+  ```bash
+  $ cd {コンテナPATH}/docker
+  $ bash build.sh
+  ```
+
+- **`--full`**: ros1_baseをローカルで完全ビルドしてから，メインイメージをビルドします．カスタマイズが必要な場合に使用します（30-60分かかる可能性があります）．
+  ```bash
+  $ cd {コンテナPATH}/docker
+  $ bash build.sh --full
+  ```
+
+- **`--full --push`**: ros1_baseをローカルで完全ビルドしてghcr.ioにプッシュしてから，メインイメージをビルドします．GitHubの認証情報が必要です（後述）．
+  ```bash
+  $ cd {コンテナPATH}/docker
+  $ GITHUB_USER=<ユーザー名> GITHUB_TOKEN=<トークン> bash build.sh --full --push
+  ```
+
+#### GitHub Personal Access Token の設定（`--full --push`を使用する場合のみ）
+
+ghcr.ioにイメージをプッシュするには，GitHub Personal Access Token（PAT）が必要です：
+
+1. [GitHub Settings - Personal access tokens](https://github.com/settings/tokens)にアクセスします
+2. "Generate new token" → "Generate new token (classic)"をクリックします
+3. トークンの名前を入力します（例：`ghcr-push-token`）
+4. 有効期限を設定します
+5. スコープで`write:packages`を選択します
+6. "Generate token"をクリックしてトークンをコピーします
+
+環境変数として設定して実行します：
+```bash
+$ export GITHUB_USER=<GitHubユーザー名>
+$ export GITHUB_TOKEN=<コピーしたトークン>
+$ cd {コンテナPATH}/docker
+$ bash build.sh --full --push
+```
+
+> [!NOTE]
+> `--push`を使用する場合は必ず`--full`と一緒に使用してください．
 
 3. イメージからコンテナを起動します．
     ```bash
@@ -118,20 +158,25 @@ int-ball2_simulatorとのROS2 bridgeのdocker imageを作成するためのリ�
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ### コンテナ内のディレクトリ構造
-- コンテナ内のディレクトリ構造は以下の様になっています
-- 基本的に開発コードは`colcon_ws`内に記述してください
+コンテナ内のディレクトリ構造は以下の様になっています．基本的に開発コードは`colcon_ws`内に記述してください．
 
-    ```sh
-    /home
-    └── sobits
-        ├── bridge          # ROS Actionのブリッジ、cmd.shなど
-        ├── catkin_ws       # ROS1環境
-        ├── colcon_msgs_ws  # ROS1独自msg
-        ├── colcon_ws       # 開発コード  
-        ├── Downloads       # 
-        ├── ros1_bridge_ws  # ROS1 Bridge
-        └── ros_entrypoint.sh
-    ```
+```sh
+/home
+└── sobits
+    ├── bridge              # ROS Actionのブリッジ、cmd.shなど
+    ├── catkin_ws           # ROS1環境
+    ├── colcon_msgs_ws      # ROS2カスタムメッセージ
+    ├── colcon_ws           # 開発コード  
+    ├── ros1_bridge_ws      # ROS1/ROS2ブリッジ
+    ├── ros2_env.sh         # ROS2環境スクリプト（対話型シェル用）
+    ├── bridge_env.sh       # ROS1+ROS2混合環境スクリプト（ブリッジプロセス用）
+    └── Downloads
+```
+
+#### 環境スクリプトについて
+
+- **`ros2_env.sh`**: 対話的なシェル（`bash exec.sh`）で自動的にソースされます．純粋なROS2環境を提供し，ROS1のパスが混在していないため，Pythonパッケージの解決が正確です．
+- **`bridge_env.sh`**: ROS1/ROS2ブリッジプロセス（`cmd.sh`）でのみ使用されます．ROS1とROS2の両方の環境をセットアップして，カスタムメッセージの相互翻訳を可能にします．
 ## マイルストーン
 現時点のバッグや新規機能の依頼を確認するために[Issueページ][issues-url] をご覧ください．
 

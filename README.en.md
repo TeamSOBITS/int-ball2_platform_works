@@ -89,10 +89,50 @@ First, prepare the following environment before proceeding to the next installat
     - Example: `ros2_bridge_ws` → `my_new_ws`
     - Ensure that container names do not overlap.
 2. Build the image from the Dockerfile.
-    ```bash
-    $ cd {container_PATH}/docker
-    $ bash build.sh
-    ```
+
+#### Build Modes
+
+`build.sh` supports three build modes:
+
+- **`--pull` (default)**: Pulls the pre-built ros1_base image from ghcr.io and uses it. This is the fastest option (recommended).
+  ```bash
+  $ cd {container_PATH}/docker
+  $ bash build.sh
+  ```
+
+- **`--full`**: Completely builds ros1_base locally, then builds the main image. Use this when customization is needed (may take 30-60 minutes).
+  ```bash
+  $ cd {container_PATH}/docker
+  $ bash build.sh --full
+  ```
+
+- **`--full --push`**: Completely builds ros1_base locally, pushes it to ghcr.io, then builds the main image. Requires GitHub authentication (see below).
+  ```bash
+  $ cd {container_PATH}/docker
+  $ GITHUB_USER=<username> GITHUB_TOKEN=<token> bash build.sh --full --push
+  ```
+
+#### GitHub Personal Access Token Setup (required only for `--full --push`)
+
+To push images to ghcr.io, a GitHub Personal Access Token (PAT) is required:
+
+1. Visit [GitHub Settings - Personal access tokens](https://github.com/settings/tokens)
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Enter a token name (e.g., `ghcr-push-token`)
+4. Set an expiration date
+5. Select `write:packages` in scopes
+6. Click "Generate token" and copy it
+
+Set as environment variables and run:
+```bash
+$ export GITHUB_USER=<GitHub username>
+$ export GITHUB_TOKEN=<copied token>
+$ cd {container_PATH}/docker
+$ bash build.sh --full --push
+```
+
+> [!NOTE]
+> When using `--push`, always use it together with `--full`.
 
 3. Start the container from the image.
     ```bash
@@ -119,20 +159,25 @@ First, prepare the following environment before proceeding to the next installat
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ### Directory structure in the container
-- The directory structure within the container is as follows:
-- Basically, please write development code in `colcon_ws`.
+The directory structure within the container is as follows. Basically, please write development code in `colcon_ws`.
 
-    ```sh
-    /home
-    └── sobits
-        ├── bridge          # Bridge for ROS Actions, cmd.sh, etc.
-        ├── catkin_ws       # ROS1 environment
-        ├── colcon_msgs_ws  # Custom ROS1 messages
-        ├── colcon_ws       # Development code  
-        ├── Downloads       # 
-        ├── ros1_bridge_ws  # ROS1 Bridge
-        └── ros_entrypoint.sh
-    ```
+```sh
+/home
+└── sobits
+    ├── bridge              # ROS Actions bridge, cmd.sh, etc.
+    ├── catkin_ws           # ROS1 environment
+    ├── colcon_msgs_ws      # ROS2 custom messages
+    ├── colcon_ws           # Development code  
+    ├── ros1_bridge_ws      # ROS1/ROS2 bridge
+    ├── ros2_env.sh         # ROS2 environment script (for interactive shell)
+    ├── bridge_env.sh       # ROS1+ROS2 mixed environment script (for bridge process)
+    └── Downloads
+```
+
+#### About Environment Scripts
+
+- **`ros2_env.sh`**: Automatically sourced in interactive shell (`bash exec.sh`). Provides a pure ROS2 environment without ROS1 paths mixed in, ensuring accurate Python package resolution.
+- **`bridge_env.sh`**: Used only in the ROS1/ROS2 bridge process (`cmd.sh`). Sets up both ROS1 and ROS2 environments to enable mutual translation of custom messages.
 
 ## Milestone
 Please visit the [Issue page][issues-url] to check for current bugs or requests for new features.
