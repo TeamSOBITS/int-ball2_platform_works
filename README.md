@@ -91,29 +91,62 @@ int-ball2_simulatorとのROS2 bridgeのdocker imageを作成するためのリ�
 
 #### ビルドモード
 
-`build.sh`は3つのビルドモードをサポートしています：
+Docker イメージは3層構造になっています：
+- **Layer 1 (ros1_base)**: OS + ROS1 Noetic + ROS2 Humble 基盤（ghcr.io で共有）
+- **Layer 2 (msg_bridge_base)**: カスタムメッセージ + ros1_bridge ビルド済み（ghcr.io で共有）
+- **Layer 3 (final)**: アプリケーションスクリプト（ローカルビルド）
 
-- **`--pull`（デフォルト）**: 事前ビルドされたros1_baseイメージをghcr.ioからプルして使用します．最も高速です（推奨）．
-  ```bash
-  $ cd {コンテナPATH}/docker
-  $ bash build.sh
-  ```
+`build.sh`は4つのビルドモードをサポートしています：
 
-- **`--full`**: ros1_baseをローカルで完全ビルドしてから，メインイメージをビルドします．カスタマイズが必要な場合に使用します（30-60分かかる可能性があります）．
-  ```bash
-  $ cd {コンテナPATH}/docker
-  $ bash build.sh --full
-  ```
+##### 1. `--pull`（デフォルト - 推奨）
+事前ビルドされた `msg_bridge_base` をプルして，アプリケーション層のみをローカルビルドします．**最も高速**（約1分以内）で，日常開発に最適です．
+```bash
+$ cd {コンテナPATH}/docker
+$ bash build.sh
+# または
+$ bash build.sh --pull
+```
 
-- **`--full --push`**: ros1_baseをローカルで完全ビルドしてghcr.ioにプッシュしてから，メインイメージをビルドします．GitHubの認証情報が必要です（後述）．
-  ```bash
-  $ cd {コンテナPATH}/docker
-  $ GITHUB_USER=<ユーザー名> GITHUB_TOKEN=<トークン> bash build.sh --full --push
-  ```
+##### 2. `--msg-build`
+メッセージ定義を更新した際に使用します． `ros1_base` からメッセージ定義と ros1_bridge をビルドし，新しい `msg_bridge_base` を生成します（20-30分）．
+```bash
+$ cd {コンテナPATH}/docker
+$ bash build.sh --msg-build
+```
 
-#### GitHub Personal Access Token の設定（`--full --push`を使用する場合のみ）
+##### 3. `--msg-build --push`
+`--msg-build` と同じですが，ビルド完了後に新しい `msg_bridge_base` を ghcr.io にプッシュします．**チームメンバーがメッセージを更新した場合，メンテナー1名がこのコマンドを実行**することで，他のメンバーは `--pull` で高速にビルドできるようになります．GitHub 認証が必要です（後述）．
+```bash
+$ cd {コンテナPATH}/docker
+$ GITHUB_USER=<ユーザー名> GITHUB_TOKEN=<トークン> bash build.sh --msg-build --push
+```
 
-ghcr.ioにイメージをプッシュするには，GitHub Personal Access Token（PAT）が必要です：
+##### 4. `--full`
+ros1_base をローカルで完全ビルドしてから，メッセージと ros1_bridge をビルドします．環境の完全検証やカスタマイズが必要な場合に使用します（40-60分以上）．
+```bash
+$ cd {コンテナPATH}/docker
+$ bash build.sh --full
+```
+
+##### 5. `--full --push`
+`--full` と同じですが，完了後に `ros1_base` を ghcr.io にプッシュします．ROS のバージョン更新など，基盤を大きく変更した場合に使用します．GitHub 認証が必要です．
+```bash
+$ cd {コンテナPATH}/docker
+$ GITHUB_USER=<ユーザー名> GITHUB_TOKEN=<トークン> bash build.sh --full --push
+```
+
+#### 推奨されるビルドフロー
+
+| 状況 | コマンド | 時間 |
+|------|---------|------|
+| 通常の開発 | `bash build.sh --pull` | ~1分 |
+| メッセージ定義を更新（メンテナー） | `bash build.sh --msg-build --push` | ~30分 |
+| メッセージ定義を更新（他のメンバー） | `bash build.sh --pull` | ~1分 |
+| 環境の完全検証 | `bash build.sh --full` | ~60分 |
+
+#### GitHub Personal Access Token の設定（`--push` を使用する場合）
+
+ghcr.io にイメージをプッシュするには，GitHub Personal Access Token（PAT）が必要です：
 
 1. [GitHub Settings - Personal access tokens](https://github.com/settings/tokens)にアクセスします
 2. "Generate new token" → "Generate new token (classic)"をクリックします
@@ -127,11 +160,13 @@ ghcr.ioにイメージをプッシュするには，GitHub Personal Access Token
 $ export GITHUB_USER=<GitHubユーザー名>
 $ export GITHUB_TOKEN=<コピーしたトークン>
 $ cd {コンテナPATH}/docker
-$ bash build.sh --full --push
+$ bash build.sh --msg-build --push
 ```
 
 > [!NOTE]
-> `--push`を使用する場合は必ず`--full`と一緒に使用してください．
+> - `--push` を使用する場合は必ず `--msg-build` または `--full` と一緒に使用してください
+> - GitHub PAT は環境変数として設定するか，`.bashrc` に追加することで永続化できます
+> - PAT の有効期限を定期的に確認し，必要に応じて更新してください
 
 3. イメージからコンテナを起動します．
     ```bash
@@ -177,6 +212,9 @@ $ bash build.sh --full --push
 
 - **`ros2_env.sh`**: 対話的なシェル（`bash exec.sh`）で自動的にソースされます．純粋なROS2環境を提供し，ROS1のパスが混在していないため，Pythonパッケージの解決が正確です．
 - **`bridge_env.sh`**: ROS1/ROS2ブリッジプロセス（`cmd.sh`）でのみ使用されます．ROS1とROS2の両方の環境をセットアップして，カスタムメッセージの相互翻訳を可能にします．
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+
 ## マイルストーン
 現時点のバッグや新規機能の依頼を確認するために[Issueページ][issues-url] をご覧ください．
 

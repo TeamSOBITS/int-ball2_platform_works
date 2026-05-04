@@ -92,27 +92,60 @@ First, prepare the following environment before proceeding to the next installat
 
 #### Build Modes
 
-`build.sh` supports three build modes:
+The Docker image has a 3-layer structure:
+- **Layer 1 (ros1_base)**: OS + ROS1 Noetic + ROS2 Humble foundation (shared on ghcr.io)
+- **Layer 2 (msg_bridge_base)**: Custom messages + pre-built ros1_bridge (shared on ghcr.io)
+- **Layer 3 (final)**: Application scripts (local build)
 
-- **`--pull` (default)**: Pulls the pre-built ros1_base image from ghcr.io and uses it. This is the fastest option (recommended).
-  ```bash
-  $ cd {container_PATH}/docker
-  $ bash build.sh
-  ```
+`build.sh` supports 4 build modes:
 
-- **`--full`**: Completely builds ros1_base locally, then builds the main image. Use this when customization is needed (may take 30-60 minutes).
-  ```bash
-  $ cd {container_PATH}/docker
-  $ bash build.sh --full
-  ```
+##### 1. `--pull` (default - recommended)
+Pulls the pre-built `msg_bridge_base` and builds only the application layer locally. **Fastest** (about 1 minute or less) and ideal for daily development.
+```bash
+$ cd {container_PATH}/docker
+$ bash build.sh
+# or
+$ bash build.sh --pull
+```
 
-- **`--full --push`**: Completely builds ros1_base locally, pushes it to ghcr.io, then builds the main image. Requires GitHub authentication (see below).
-  ```bash
-  $ cd {container_PATH}/docker
-  $ GITHUB_USER=<username> GITHUB_TOKEN=<token> bash build.sh --full --push
-  ```
+##### 2. `--msg-build`
+Used when message definitions are updated. Builds message definitions and ros1_bridge from `ros1_base`, generating a new `msg_bridge_base` (20-30 minutes).
+```bash
+$ cd {container_PATH}/docker
+$ bash build.sh --msg-build
+```
 
-#### GitHub Personal Access Token Setup (required only for `--full --push`)
+##### 3. `--msg-build --push`
+Same as `--msg-build`, but pushes the new `msg_bridge_base` to ghcr.io after building. **When one team member runs this command after updating messages**, other members can build quickly using `--pull`. GitHub authentication required (described below).
+```bash
+$ cd {container_PATH}/docker
+$ GITHUB_USER=<username> GITHUB_TOKEN=<token> bash build.sh --msg-build --push
+```
+
+##### 4. `--full`
+Completely builds ros1_base locally, then builds messages and ros1_bridge. Use for full environment validation or when customization is needed (40-60 minutes or more).
+```bash
+$ cd {container_PATH}/docker
+$ bash build.sh --full
+```
+
+##### 5. `--full --push`
+Same as `--full`, but pushes `ros1_base` to ghcr.io after building. Use when making major foundational changes, such as ROS version updates. GitHub authentication required.
+```bash
+$ cd {container_PATH}/docker
+$ GITHUB_USER=<username> GITHUB_TOKEN=<token> bash build.sh --full --push
+```
+
+#### Recommended Build Workflow
+
+| Situation | Command | Time |
+|-----------|---------|------|
+| Regular development | `bash build.sh --pull` | ~1 minute |
+| Update message definitions (maintainer) | `bash build.sh --msg-build --push` | ~30 minutes |
+| Update message definitions (other members) | `bash build.sh --pull` | ~1 minute |
+| Full environment validation | `bash build.sh --full` | ~60 minutes |
+
+#### GitHub Personal Access Token Setup (required only for `--push`)
 
 To push images to ghcr.io, a GitHub Personal Access Token (PAT) is required:
 
@@ -128,11 +161,13 @@ Set as environment variables and run:
 $ export GITHUB_USER=<GitHub username>
 $ export GITHUB_TOKEN=<copied token>
 $ cd {container_PATH}/docker
-$ bash build.sh --full --push
+$ bash build.sh --msg-build --push
 ```
 
 > [!NOTE]
-> When using `--push`, always use it together with `--full`.
+> - When using `--push`, always use it together with `--msg-build` or `--full`
+> - You can persist GitHub PAT by setting it as environment variables or adding to `.bashrc`
+> - Periodically check the expiration date of your PAT and update if necessary
 
 3. Start the container from the image.
     ```bash

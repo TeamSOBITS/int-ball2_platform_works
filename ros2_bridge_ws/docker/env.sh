@@ -12,6 +12,10 @@ export ROS_DISTRO="humble"
 export ROS_DOMAIN_ID="0"
 export ROS_WORKSPACE="colcon_ws"
 
+# -- Docker Registry Configuration (for multi-layer builds) --
+export IMAGE_BASE_NOETIC_HUMBLE="ghcr.io/teamsobits/ros1_base:noetic-humble"
+export IMAGE_MSG_BRIDGE_BASE="ghcr.io/teamsobits/msg_bridge_base:latest"
+
 # --- Do not modify below this line ---
 
 # -- User and Group IDs --
