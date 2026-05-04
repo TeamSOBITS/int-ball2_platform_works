@@ -3,13 +3,22 @@
 # - ros1_base: OS + ROS1 Noetic + ROS2 Humble (base foundation, reusable)
 # - msg_bridge_base: ros1_base + custom messages + ros1_bridge (heavy build, shared via ghcr.io)
 # - final: msg_bridge_base + application scripts (local builds only, fast iteration)
+#
+# Build mode selection:
+#   --full:       ROS1_BASE_IMAGE=ros1_base_local  → builds ros1_base from scratch
+#   --msg-build:  ROS1_BASE_IMAGE=ghcr.io/.../ros1_base:noetic-humble  → pulls ros1_base
+#   --pull:       uses Dockerfile.final directly (this file is not used)
+
+# Global ARG: must be declared before the first FROM to be usable in FROM instructions.
+# --full:      leave as default → uses locally built ros1_base_local stage
+# --msg-build: override with ghcr.io/teamsobits/ros1_base:noetic-humble
+ARG ROS1_BASE_IMAGE=ros1_base_local
 
 # ============================================================================
-# LAYER 1: ros1_base - Base foundation (OS + ROS1 + ROS2)
+# LAYER 1a: ros1_base_local - Full local build of base foundation (--full mode)
 # ============================================================================
-# This layer provides the OS environment and both ROS distributions.
-# Built locally with --full, or pulled from ghcr.io in normal --pull mode.
-FROM osrf/ros:humble-desktop-full AS ros1_base
+# Only built when ROS1_BASE_IMAGE is not overridden (i.e., --full mode).
+FROM osrf/ros:humble-desktop-full AS ros1_base_local
 
 ARG USERNAME=ros
 ARG LOCAL_UID=1000
@@ -114,6 +123,13 @@ RUN cd /home/${USERNAME}/catkin_ws && \
         --make-args -j$(nproc)
 
 WORKDIR /home/${USERNAME}
+
+# ============================================================================
+# LAYER 1b: ros1_base - Unified stage (local build or pulled from registry)
+# ============================================================================
+# --full mode:      ROS1_BASE_IMAGE=ros1_base_local (default, built above)
+# --msg-build mode: ROS1_BASE_IMAGE=ghcr.io/teamsobits/ros1_base:noetic-humble
+FROM ${ROS1_BASE_IMAGE} AS ros1_base
 
 # ============================================================================
 # LAYER 2: msg_bridge_base - Custom messages + ros1_bridge (heavy build)

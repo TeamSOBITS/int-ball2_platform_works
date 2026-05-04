@@ -100,16 +100,13 @@ docker_login_ghcr() {
 # ============================================================================
 # LAYER 1: ros1_base preparation
 # ============================================================================
-if [[ "$MODE" == "pull" || "$MODE" == "msg-build" ]]; then
-  echo "[build.sh] Pulling ${ROS1_BASE_IMAGE}..."
-  docker pull "${ROS1_BASE_IMAGE}"
-elif [[ "$MODE" == "full" ]]; then
+if [[ "$MODE" == "full" ]]; then
   echo "[build.sh] Building ros1_base locally (this may take 30+ minutes)..."
   docker build \
     --build-arg USERNAME="${USERNAME}" \
     --build-arg LOCAL_UID="${LOCAL_UID}" \
     --build-arg LOCAL_GID="${LOCAL_GID}" \
-    --target ros1_base \
+    --target ros1_base_local \
     -t "${ROS1_BASE_IMAGE}" \
     -f Dockerfile \
     .
@@ -129,16 +126,20 @@ if [[ "$MODE" == "msg-build" ]]; then
   MSG_BRIDGE_IMAGE_LATEST="${MSG_BRIDGE_BASE_IMAGE}:latest"
   MSG_BRIDGE_IMAGE_TAGGED="${MSG_BRIDGE_BASE_IMAGE}:${TIMESTAMP}"
 
-  echo "[build.sh] Building msg_bridge_base locally (this may take 20-30 minutes)..."
+  echo "[build.sh] Pulling ${ROS1_BASE_IMAGE}..."
+  docker pull "${ROS1_BASE_IMAGE}"
+
+  echo "[build.sh] Building msg_bridge_base (this may take 20-30 minutes)..."
+  export DOCKER_BUILDKIT=1
   docker build \
     --build-arg USERNAME="${USERNAME}" \
     --build-arg LOCAL_UID="${LOCAL_UID}" \
     --build-arg LOCAL_GID="${LOCAL_GID}" \
     --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
+    --build-arg ROS1_BASE_IMAGE="${ROS1_BASE_IMAGE}" \
     --target msg_bridge_base \
     --tag "${MSG_BRIDGE_IMAGE_LATEST}" \
     --tag "${MSG_BRIDGE_IMAGE_TAGGED}" \
-    --build-arg DOCKER_BUILDKIT=1 \
     -f Dockerfile \
     .
 
@@ -148,10 +149,9 @@ if [[ "$MODE" == "msg-build" ]]; then
     docker push "${MSG_BRIDGE_IMAGE_LATEST}"
     echo "[build.sh] Pushing ${MSG_BRIDGE_IMAGE_TAGGED}..."
     docker push "${MSG_BRIDGE_IMAGE_TAGGED}"
-    echo "[build.sh] msg_bridge_base pushed successfully (tag: ${TIMESTAMP})"
+    echo "[build.sh] msg_bridge_base pushed (tag: ${TIMESTAMP})"
   fi
 
-  # Skip the final image build for msg-build mode
   echo "Done. msg_bridge_base is ready."
   exit 0
 fi
@@ -178,22 +178,58 @@ ROS_WORKSPACE=${ROS_WORKSPACE}
 EOF
 
 # ============================================================================
-# LAYER 3: final (application layer - scripts, configuration)
+# LAYER 3: final (application layer)
 # ============================================================================
-echo "[build.sh] Building application layer (final image)..."
+# --pull mode: build from Dockerfile.final (FROM msg_bridge_base on ghcr.io, fast)
+# --full mode: build from Dockerfile full chain (locally built stages)
+# ============================================================================
 export DOCKER_BUILDKIT=1
 
-if [ "${COMPUTE_TYPE}" = "gpu" ]; then
-  if ! command -v nvidia-smi &> /dev/null; then
-    echo "Error: nvidia-smi not found. GPU may not be available."
+_build_final() {
+  local dockerfile="$1"
+  echo "[build.sh] Building application layer (final image) from ${dockerfile}..."
+  if [ "${COMPUTE_TYPE}" = "gpu" ]; then
+    if ! command -v nvidia-smi &> /dev/null; then
+      echo "Error: nvidia-smi not found. GPU may not be available."
+      exit 1
+    fi
+    docker compose -f docker-compose.yml -f docker-compose.gpu.yml build \
+      --build-arg MSG_BRIDGE_BASE_IMAGE="${MSG_BRIDGE_BASE_IMAGE}" \
+      sobits-container
+  elif [ "${COMPUTE_TYPE}" = "cpu" ]; then
+    docker compose -f docker-compose.yml build \
+      --build-arg MSG_BRIDGE_BASE_IMAGE="${MSG_BRIDGE_BASE_IMAGE}" \
+      sobits-container
+  else
+    echo "Error: Invalid COMPUTE_TYPE '${COMPUTE_TYPE}' in env.sh"
     exit 1
   fi
-  docker compose -f docker-compose.yml -f docker-compose.gpu.yml build sobits-container
-elif [ "${COMPUTE_TYPE}" = "cpu" ]; then
-  docker compose -f docker-compose.yml build sobits-container
-else
-  echo "Error: Invalid COMPUTE_TYPE '${COMPUTE_TYPE}' in env.sh"
-  exit 1
+}
+
+if [[ "$MODE" == "pull" ]]; then
+  echo "[build.sh] Pulling ${MSG_BRIDGE_BASE_IMAGE}..."
+  docker pull "${MSG_BRIDGE_BASE_IMAGE}"
+  # Build final layer only using Dockerfile.final (no ros1_base rebuild)
+  docker build \
+    --build-arg USERNAME="${USERNAME}" \
+    --build-arg LOCAL_UID="${LOCAL_UID}" \
+    --build-arg LOCAL_GID="${LOCAL_GID}" \
+    --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
+    --build-arg MSG_BRIDGE_BASE_IMAGE="${MSG_BRIDGE_BASE_IMAGE}" \
+    -t "${IMAGE_NAME}" \
+    -f Dockerfile.final \
+    .
+elif [[ "$MODE" == "full" ]]; then
+  # Build final from the locally built msg_bridge_base (full chain in Dockerfile)
+  docker build \
+    --build-arg USERNAME="${USERNAME}" \
+    --build-arg LOCAL_UID="${LOCAL_UID}" \
+    --build-arg LOCAL_GID="${LOCAL_GID}" \
+    --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
+    --target final \
+    -t "${IMAGE_NAME}" \
+    -f Dockerfile \
+    .
 fi
 
 echo "Done."
