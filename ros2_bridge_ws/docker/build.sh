@@ -1,11 +1,77 @@
 #!/bin/bash
 set -e
 
+# -- Mode flags --
+MODE="pull"
+PUSH=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --pull)
+      MODE="pull"
+      shift
+      ;;
+    --full)
+      MODE="full"
+      shift
+      ;;
+    --push)
+      PUSH=true
+      shift
+      ;;
+    -h|--help)
+      cat <<USAGE
+Usage: $0 [--pull | --full] [--push]
+  --pull          (default) Pull ros1_base from ghcr.io, then build the main image
+  --full          Build ros1_base locally, then build the main image
+  --full --push   Build ros1_base locally and push to ghcr.io (requires GITHUB_USER and GITHUB_TOKEN)
+USAGE
+      exit 0
+      ;;
+    *)
+      echo "Error: unknown argument '$1'"; exit 1
+      ;;
+  esac
+done
+
+if [[ "$PUSH" == "true" && "$MODE" != "full" ]]; then
+  echo "Error: --push must be combined with --full"; exit 1
+fi
+
 # Load environment variables
 if [[ -f "./env.sh" ]]; then
   source ./env.sh
 else
   echo "Error: env.sh not found"; exit 1
+fi
+
+ROS1_BASE_IMAGE="ghcr.io/teamsobits/ros1_base:noetic-humble"
+
+# -- ros1_base preparation --
+if [[ "$MODE" == "pull" ]]; then
+  echo "[build.sh] Pulling ${ROS1_BASE_IMAGE}..."
+  docker pull "${ROS1_BASE_IMAGE}"
+elif [[ "$MODE" == "full" ]]; then
+  echo "[build.sh] Building ${ROS1_BASE_IMAGE} locally..."
+  docker build \
+    --build-arg USERNAME="${USERNAME}" \
+    --build-arg LOCAL_UID="${LOCAL_UID}" \
+    --build-arg LOCAL_GID="${LOCAL_GID}" \
+    -f Dockerfile.ros1_base \
+    -t "${ROS1_BASE_IMAGE}" \
+    .
+
+  if [[ "$PUSH" == "true" ]]; then
+    if [[ -z "${GITHUB_USER}" || -z "${GITHUB_TOKEN}" ]]; then
+      echo "Error: GITHUB_USER and GITHUB_TOKEN environment variables are required for --push"
+      echo "       The token must have 'write:packages' scope."
+      exit 1
+    fi
+    echo "[build.sh] Logging in to ghcr.io..."
+    echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USER}" --password-stdin
+    echo "[build.sh] Pushing ${ROS1_BASE_IMAGE}..."
+    docker push "${ROS1_BASE_IMAGE}"
+  fi
 fi
 
 # Delete existing .env file if it exists
@@ -17,6 +83,7 @@ fi
 cat > .env <<EOF
 LOCAL_UID=${LOCAL_UID}
 LOCAL_GID=${LOCAL_GID}
+RENDER_GID=${RENDER_GID}
 UBUNTU_VERSION=${UBUNTU_VERSION}
 COMPUTE_TYPE=${COMPUTE_TYPE}
 USERNAME=${USERNAME}
@@ -28,28 +95,8 @@ ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
 ROS_WORKSPACE=${ROS_WORKSPACE}
 EOF
 
-cat > ros_entrypoint.sh <<EOF
-source /opt/ros/noetic/setup.bash
-if [ -f ~/catkin_ws/devel/setup.bash ]; then
-  source ~/catkin_ws/devel/setup.bash
-fi
-source /opt/ros/humble/setup.bash
-if [ -f ~/colcon_msgs_ws/install/setup.bash ]; then
-  source ~/colcon_msgs_ws/install/setup.bash
-fi
-if [ -f ~/ros1_bridge_ws/install/setup.bash ]; then
-  source ~/ros1_bridge_ws/install/setup.bash
-fi
-if [ -f ~/colcon_ws/install/setup.bash ]; then
-  source ~/colcon_ws/install/setup.bash
-fi
-source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
-export ROS_MASTER_URI=\${ROS_MASTER_URI:-http://localhost:11311}
-export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
-alias cb='CURRENT_DIR=`pwd` && cd ~/colcon_ws/ && colcon build --symlink-install && source ~/.bashrc && cd ${CURRENT_DIR}'
-alias bridge='bash ~/bridge/cmd.sh'
-EOF
-
+# -- Main image build --
+export DOCKER_BUILDKIT=1
 if [ "${COMPUTE_TYPE}" = "gpu" ]; then
   if ! command -v nvidia-smi &> /dev/null; then
     echo "Error: nvidia-smi not found. GPU may not be available."
@@ -62,7 +109,5 @@ else
   echo "Error: Invalid COMPUTE_TYPE '${COMPUTE_TYPE}' in env.sh"
   exit 1
 fi
-
-rm -f ros_entrypoint.sh
 
 echo "Done."

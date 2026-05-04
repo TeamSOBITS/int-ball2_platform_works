@@ -1,4 +1,5 @@
-FROM ubuntu:22.04
+# syntax=docker/dockerfile:1
+FROM ghcr.io/teamsobits/ros1_base:noetic-humble
 
 ARG USERNAME=ros
 ARG LOCAL_UID=1000
@@ -13,101 +14,18 @@ ENV ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
 
 SHELL ["/bin/bash", "-c"]
 
-############################# Base packages ##############################
-RUN apt-get update -q && apt-get upgrade -yq && apt-get install -yq --no-install-recommends \
-        wget \
-        curl \
-        git \
-        gnupg \
-        build-essential \
-        vim \
-        sudo \
-        lsb-release \
-        locales \
-        bash-completion \
-        glmark2 \
-        tzdata \
-        software-properties-common \
-        cmake \
-        python3-empy \
-        libboost-all-dev && \
-    locale-gen en_US.UTF-8 && \
-    update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 && \
-    rm -rf /var/lib/apt/lists/*
-
-############################# ROS2 installation ##############################
-RUN add-apt-repository universe && \
-    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" > /etc/apt/sources.list.d/ros2.list && \
-    echo "deb http://packages.ros.org/ros/ubuntu focal main" > /etc/apt/sources.list.d/ros-latest.list && \
-    curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - && \
-    apt-get update -q && \
-    apt-get install -yq --no-install-recommends \
-        ros-humble-desktop \
-        ros-dev-tools \
-        python3-defusedxml \
-        python3-rosdep \
-        python3-rosinstall-generator \
-        python3-vcstools \
-        python3-vcstool && \
-    rosdep init && \
-    rm -rf /var/lib/apt/lists/*
-
-############################# User setup ##############################
-RUN if ! getent group ${LOCAL_GID} >/dev/null; then groupadd --gid ${LOCAL_GID} ${USERNAME}; fi && \
-    if ! id -u ${USERNAME} >/dev/null 2>&1; then useradd --uid ${LOCAL_UID} --gid ${LOCAL_GID} -m -s /bin/bash ${USERNAME}; fi && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
-
-USER ${USERNAME}
-WORKDIR /home/${USERNAME}
-
-############################# ROS1 installation ##############################
-RUN mkdir -p /home/${USERNAME}/Downloads
-RUN cd /home/${USERNAME}/Downloads && \
-    wget http://archive.ubuntu.com/ubuntu/pool/universe/h/hddtemp/hddtemp_0.3-beta15-53_amd64.deb && \
+############################# ROS2 gazebo_msgs (apt) ##############################
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     sudo apt-get update -q && \
-    sudo apt-get install -yq ./hddtemp_0.3-beta15-53_amd64.deb
-
-RUN cd /home/${USERNAME}/Downloads && \
-    wget https://raw.githubusercontent.com/ros/rosdistro/master/rosdep/base.yaml && \
-    sed -i '/focal: \[hddtemp\]/a \    jammy: \[hddtemp\]' base.yaml && \
-    sudo sed -i "s|^yaml .*base.yaml$|yaml file:///home/${USERNAME}/Downloads/base.yaml|" /etc/ros/rosdep/sources.list.d/20-default.list && \
-    sudo rosdep update
-
-RUN sudo apt-get update -q && \
-    sudo apt-get install -yq --no-install-recommends liburdfdom-headers-dev liburdfdom-dev && \
-    sudo rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /home/${USERNAME}/catkin_ws && \
-    cd /home/${USERNAME}/catkin_ws && \
-    rosinstall_generator ros_comm rosconsole_bridge actionlib actionlib_msgs geometry_msgs common_msgs tf2_msgs tf2_geometry_msgs visualization_msgs --rosdistro noetic --deps --tar > noetic-ros_comm.rosinstall && \
-    mkdir -p src && \
-    vcs import --input noetic-ros_comm.rosinstall ./src && \
-    sudo apt-get update -q && \
-    sudo rosdep install --from-paths ./src --ignore-packages-from-source --rosdistro noetic -y --skip-keys=python3-rospkg
-
-RUN cd /home/${USERNAME}/catkin_ws/src && \
-    mkdir -p /home/${USERNAME}/Downloads/backup && \
-    if [ -d rosconsole ]; then mv rosconsole /home/${USERNAME}/Downloads/backup/; fi && \
-    if [ -d urdf ]; then mv urdf /home/${USERNAME}/Downloads/backup/; fi && \
-    git clone https://github.com/dreuter/rosconsole.git && \
-    cd rosconsole && \
-    git checkout noetic-jammy && \
-    cd /home/${USERNAME}/catkin_ws/src && \
-    git clone https://github.com/dreuter/urdf.git && \
-    cd urdf && \
-    git checkout set-cxx-version && \
-    cd /home/${USERNAME}/catkin_ws/src
-
-RUN cd /home/${USERNAME}/catkin_ws && \
-    sudo ./src/catkin/bin/catkin_make_isolated --install --install-space /opt/ros/noetic -DCMAKE_BUILD_TYPE=Release
+    sudo apt-get install -yq --no-install-recommends \
+        ros-humble-gazebo-msgs
 
 ############################# ROS1 custom msgs ##############################
 RUN mkdir -p /home/${USERNAME}/catkin_ws/src
 COPY --chown=${USERNAME}:${USERNAME} baked_pkgs/ib2_msgs/ /home/${USERNAME}/catkin_ws/src/ib2_msgs/
 COPY --chown=${USERNAME}:${USERNAME} baked_pkgs/platform_msgs/ /home/${USERNAME}/catkin_ws/src/platform_msgs/
-RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && cd /home/${USERNAME}/catkin_ws && catkin_make"
+RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && cd /home/${USERNAME}/catkin_ws && catkin_make -j$(nproc)"
 
 ############################# ROS2 custom msgs ##############################
 RUN mkdir -p /home/${USERNAME}/colcon_msgs_ws/src/ib2_msgs/msg \
@@ -124,22 +42,52 @@ COPY --chown=${USERNAME}:${USERNAME} msgs_ros2/ib2_msgs/package.xml /home/${USER
 COPY --chown=${USERNAME}:${USERNAME} msgs_ros2/ib2_msgs/CMakeLists.txt /home/${USERNAME}/colcon_msgs_ws/src/ib2_msgs/CMakeLists.txt
 COPY --chown=${USERNAME}:${USERNAME} msgs_ros2/platform_msgs/package.xml /home/${USERNAME}/colcon_msgs_ws/src/platform_msgs/package.xml
 COPY --chown=${USERNAME}:${USERNAME} msgs_ros2/platform_msgs/CMakeLists.txt /home/${USERNAME}/colcon_msgs_ws/src/platform_msgs/CMakeLists.txt
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash && cd /home/${USERNAME}/colcon_msgs_ws && colcon build"
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && cd /home/${USERNAME}/colcon_msgs_ws && colcon build --parallel-workers $(nproc)"
 
 ############################# ros1_bridge installation ##############################
 RUN mkdir -p /home/${USERNAME}/ros1_bridge_ws/src
 RUN cd /home/${USERNAME}/ros1_bridge_ws/src && \
     git clone https://github.com/ros2/ros1_bridge.git
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash && source /home/${USERNAME}/colcon_msgs_ws/install/setup.bash && \
-    cd /home/${USERNAME}/ros1_bridge_ws && colcon build --symlink-install --packages-skip ros1_bridge"
+    cd /home/${USERNAME}/ros1_bridge_ws && colcon build --symlink-install --packages-skip ros1_bridge --parallel-workers $(nproc)"
 RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && source /home/${USERNAME}/catkin_ws/devel/setup.bash && \
     source /opt/ros/humble/setup.bash && source /home/${USERNAME}/colcon_msgs_ws/install/setup.bash && \
-    cd /home/${USERNAME}/ros1_bridge_ws && colcon build --symlink-install --packages-select ros1_bridge --cmake-force-configure"
+    cd /home/${USERNAME}/ros1_bridge_ws && colcon build --symlink-install --packages-select ros1_bridge --cmake-force-configure --parallel-workers $(nproc)"
 
 RUN mkdir -p /home/${USERNAME}/colcon_ws/src
 
-COPY --chown=${USERNAME}:${USERNAME} ros_entrypoint.sh /home/${USERNAME}/ros_entrypoint.sh
-RUN echo "source /home/${USERNAME}/ros_entrypoint.sh" >> /home/${USERNAME}/.bashrc
+############################# Shell environment scripts ##############################
+# Interactive shell env: pure ROS2 (no ros1_bridge_ws / catkin_ws to avoid
+# shadowing humble Python pkgs — ros1_bridge_ws transitively re-sources catkin_ws).
+# Use if/fi blocks (NOT [ -f ] && source) so the script always returns 0
+# even when sourced under `set -e` (colcon-generated setup.bash may return non-zero).
+RUN cat > /home/${USERNAME}/ros2_env.sh <<'EOF' && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/ros2_env.sh
+source /opt/ros/humble/setup.bash
+if [ -f ~/colcon_msgs_ws/install/setup.bash ]; then source ~/colcon_msgs_ws/install/setup.bash; fi
+if [ -f ~/colcon_ws/install/setup.bash ]; then source ~/colcon_ws/install/setup.bash; fi
+source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
+export ROS_MASTER_URI=${ROS_MASTER_URI:-http://localhost:11311}
+alias cb='CURRENT_DIR=`pwd` && cd ~/colcon_ws/ && colcon build --symlink-install && source ~/.bashrc && cd ${CURRENT_DIR}'
+alias bridge='bash ~/bridge/cmd.sh'
+# To use ros1_bridge or ROS1 msgs interactively, source bridge_env.sh:
+#   source ~/bridge_env.sh
+:
+EOF
+
+# Bridge env: full ROS1+2 mixed (only for cmd.sh / ros1_bridge process)
+RUN cat > /home/${USERNAME}/bridge_env.sh <<'EOF' && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/bridge_env.sh
+source /opt/ros/noetic/setup.bash
+if [ -f ~/catkin_ws/devel/setup.bash ]; then source ~/catkin_ws/devel/setup.bash; fi
+source /opt/ros/humble/setup.bash
+if [ -f ~/colcon_msgs_ws/install/setup.bash ]; then source ~/colcon_msgs_ws/install/setup.bash; fi
+if [ -f ~/ros1_bridge_ws/install/setup.bash ]; then source ~/ros1_bridge_ws/install/setup.bash; fi
+if [ -f ~/colcon_ws/install/setup.bash ]; then source ~/colcon_ws/install/setup.bash; fi
+:
+EOF
+
+# Bake into .bashrc
+RUN echo "source /home/${USERNAME}/ros2_env.sh" >> /home/${USERNAME}/.bashrc && \
+    echo "export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}" >> /home/${USERNAME}/.bashrc
 
 ############################# Bridge scripts (prod entrypoint) ##############################
 RUN mkdir -p /home/${USERNAME}/bridge
