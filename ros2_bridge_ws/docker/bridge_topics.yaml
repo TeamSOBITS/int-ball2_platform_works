@@ -1,0 +1,182 @@
+# parameter_bridge topic/service configuration
+# Load onto ROS1 param server before starting parameter_bridge:
+#   rosparam load ~/bridge/bridge_topics.yaml /
+#
+# Excluded:
+#   /nav/attitude, /nav/true/attitude  -- sim_msgs/Attitude has no ROS2 package
+#   /ib2_user/complete                 -- std_msgs/Time removed in ROS2 (builtin_interfaces/Time)
+
+topics:
+  # ---- カメラ ----
+  - topic: /camera_main/image_raw
+    type: sensor_msgs/msg/Image
+    queue_size: 1
+  - topic: /camera_main/image_raw/compressed
+    type: sensor_msgs/msg/CompressedImage
+    queue_size: 1
+  - topic: /camera_main/camera_info
+    type: sensor_msgs/msg/CameraInfo
+    queue_size: 10
+  - topic: /camera_left/image_raw
+    type: sensor_msgs/msg/Image
+    queue_size: 1
+  - topic: /camera_left/image_raw/compressed
+    type: sensor_msgs/msg/CompressedImage
+    queue_size: 1
+  - topic: /camera_left/camera_info
+    type: sensor_msgs/msg/CameraInfo
+    queue_size: 10
+  - topic: /camera_right/image_raw
+    type: sensor_msgs/msg/Image
+    queue_size: 1
+  - topic: /camera_right/image_raw/compressed
+    type: sensor_msgs/msg/CompressedImage
+    queue_size: 1
+  - topic: /camera_right/camera_info
+    type: sensor_msgs/msg/CameraInfo
+    queue_size: 10
+  - topic: /camera_main/status
+    type: platform_msgs/msg/CameraStatus
+    queue_size: 10
+  - topic: /camera_left/status
+    type: platform_msgs/msg/CameraStatus
+    queue_size: 10
+  - topic: /camera_right/status
+    type: platform_msgs/msg/CameraStatus
+    queue_size: 10
+
+  # ---- ナビゲーション・姿勢 ----
+  - topic: /nav/true/navigation
+    type: ib2_msgs/msg/Navigation
+    queue_size: 10
+  - topic: /nav/status
+    type: std_msgs/msg/Int32
+    queue_size: 10
+  - topic: /nav/time_offset
+    type: std_msgs/msg/Float64
+    queue_size: 10
+  - topic: /sensor_fusion/navigation
+    type: ib2_msgs/msg/Navigation
+    queue_size: 10
+  - topic: /sensor_fusion/navigation_debug
+    type: ib2_msgs/msg/NavigationDebug
+    queue_size: 10
+  - topic: /sensor_fusion/navigation_status
+    type: ib2_msgs/msg/NavigationStatus
+    queue_size: 10
+  - topic: /sim/iss_navigation
+    type: ib2_msgs/msg/Navigation
+    queue_size: 10
+  - topic: /imu/imu
+    type: ib2_msgs/msg/IMU
+    queue_size: 10
+  - topic: /tf
+    type: tf2_msgs/msg/TFMessage
+    queue_size: 100
+  - topic: /tf_static
+    type: tf2_msgs/msg/TFMessage
+    queue_size: 100
+  - topic: /joint_states
+    type: sensor_msgs/msg/JointState
+    queue_size: 10
+  - topic: /initialpose
+    type: geometry_msgs/msg/PoseWithCovarianceStamped
+    queue_size: 10
+  - topic: /move_base_simple/goal
+    type: geometry_msgs/msg/PoseStamped
+    queue_size: 10
+  - topic: /clicked_point
+    type: geometry_msgs/msg/PointStamped
+    queue_size: 10
+
+  # ---- 制御 ----
+  - topic: /ctl/status
+    type: ib2_msgs/msg/CtlStatus
+    queue_size: 10
+  - topic: /ctl/duty
+    type: std_msgs/msg/Float64MultiArray
+    queue_size: 10
+  - topic: /ctl/profile
+    type: ib2_msgs/msg/CtlProfile
+    queue_size: 10
+  - topic: /ctl/wrench
+    type: geometry_msgs/msg/WrenchStamped
+    queue_size: 10
+  - topic: /thr/fan_force
+    type: std_msgs/msg/Float64MultiArray
+    queue_size: 10
+
+  # ---- タスク・ユーザー操作 ----
+  - topic: /task_manager/mode
+    type: ib2_msgs/msg/Mode
+    queue_size: 10
+  - topic: /ib2_user/start
+    type: platform_msgs/msg/UserLogic
+    queue_size: 10
+  - topic: /ib2_user/status
+    type: platform_msgs/msg/UserNodeStatus
+    queue_size: 10
+  - topic: /ib2_tracker
+    type: nav_msgs/msg/Odometry
+    queue_size: 10
+
+  # ---- 表示・マーカー ----
+  - topic: /area_marker_array
+    type: visualization_msgs/msg/MarkerArray
+    queue_size: 10
+  - topic: /spawned_object_markers
+    type: visualization_msgs/msg/Marker
+    queue_size: 10
+  - topic: /spawned_object_markers_array
+    type: visualization_msgs/msg/MarkerArray
+    queue_size: 10
+  - topic: /ib2_route_display/history
+    type: visualization_msgs/msg/Marker
+    queue_size: 10
+  - topic: /ib2_route_display/history_array
+    type: visualization_msgs/msg/MarkerArray
+    queue_size: 10
+  - topic: /ib2_route_display/target
+    type: visualization_msgs/msg/MarkerArray
+    queue_size: 10
+  - topic: /led_display_left/led_colors
+    type: ib2_msgs/msg/LEDColors
+    queue_size: 10
+  - topic: /led_display_right/led_colors
+    type: ib2_msgs/msg/LEDColors
+    queue_size: 10
+
+  # ---- Gazebo（sim限定）----
+  - topic: /gazebo/link_states
+    type: gazebo_msgs/msg/LinkStates
+    queue_size: 10
+  - topic: /gazebo/model_states
+    type: gazebo_msgs/msg/ModelStates
+    queue_size: 10
+  - topic: /gazebo/set_link_state
+    type: gazebo_msgs/msg/LinkState
+    queue_size: 10
+  - topic: /gazebo/set_model_state
+    type: gazebo_msgs/msg/ModelState
+    queue_size: 10
+  - topic: /gazebo/performance_metrics
+    type: gazebo_msgs/msg/PerformanceMetrics
+    queue_size: 10
+
+# ROS1サービスをROS2から呼び出す（ROS2 server + ROS1 client）
+# 型名はROS1フォーマット（pkg/SrvName）で指定する
+services_2_to_1:
+  - service: /gazebo/pause_physics
+    type: std_srvs/Empty
+  - service: /gazebo/reset_simulation
+    type: std_srvs/Empty
+  - service: /gazebo/reset_world
+    type: std_srvs/Empty
+  - service: /gazebo/set_model_state
+    type: gazebo_msgs/SetModelState
+  - service: /gazebo/get_model_state
+    type: gazebo_msgs/GetModelState
+  - service: /gazebo/spawn_sdf_model
+    type: gazebo_msgs/SpawnModel
+  - service: /gazebo/delete_model
+    type: gazebo_msgs/DeleteModel

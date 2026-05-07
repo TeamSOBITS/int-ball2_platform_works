@@ -42,7 +42,7 @@ RUN echo "source /root/ros2_env.sh" >> /root/.bashrc && \
 
 # Bridge scripts (application entry point)
 RUN mkdir -p /root/bridge
-COPY cmd.sh action_bridge_node.py bridge_ros1_helper.py /root/bridge/
+COPY cmd.sh action_bridge_node.py bridge_ros1_helper.py bridge_topics.yaml /root/bridge/
 RUN chmod +x /root/bridge/cmd.sh /root/bridge/action_bridge_node.py
 
 WORKDIR /root
