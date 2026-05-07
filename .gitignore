@@ -1,1 +1,4 @@
 ros2_bridge_ws/docker/.env
+openspec/
+.github/
+.claude/

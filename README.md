@@ -196,17 +196,21 @@ $ bash build.sh --msg-build --push
 コンテナ内のディレクトリ構造は以下の様になっています．基本的に開発コードは`colcon_ws`内に記述してください．
 
 ```sh
-/home
-└── sobits
-    ├── bridge              # ROS Actionのブリッジ、cmd.shなど
-    ├── catkin_ws           # ROS1環境
-    ├── colcon_msgs_ws      # ROS2カスタムメッセージ
-    ├── colcon_ws           # 開発コード  
-    ├── ros1_bridge_ws      # ROS1/ROS2ブリッジ
-    ├── ros2_env.sh         # ROS2環境スクリプト（対話型シェル用）
-    ├── bridge_env.sh       # ROS1+ROS2混合環境スクリプト（ブリッジプロセス用）
-    └── Downloads
+/root
+├── bridge              # ROS Actionのブリッジ、cmd.shなど
+├── catkin_ws           # ROS1環境
+├── colcon_msgs_ws      # ROS2カスタムメッセージ
+├── colcon_ws           # 開発コード
+├── ros1_bridge_ws      # ROS1/ROS2ブリッジ
+├── ros2_env.sh         # ROS2環境スクリプト（対話型シェル用）
+├── bridge_env.sh       # ROS1+ROS2混合環境スクリプト（ブリッジプロセス用）
+└── Downloads
 ```
+
+> [!NOTE]
+> コンテナは `root` ユーザーで実行されるため，ホームディレクトリは `/home/root` ではなく `/root` です．
+> `bash exec.sh` で対話シェルに入ると，プロンプト左端のユーザー名 (`root`) がオレンジ色で表示され，ホスト側のシェルと視覚的に区別できます．
+> bind mount された `../src` はコンテナ内で root 所有になるため，ホスト側で編集する際は権限に注意してください．
 
 #### 環境スクリプトについて
 

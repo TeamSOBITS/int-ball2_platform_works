@@ -4,7 +4,6 @@
 ARG MSG_BRIDGE_BASE_IMAGE=ghcr.io/teamsobits/msg_bridge_base:latest
 FROM ${MSG_BRIDGE_BASE_IMAGE}
 
-ARG USERNAME=ros
 ARG ROS_DOMAIN_ID=0
 
 ENV ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
@@ -12,7 +11,7 @@ ENV ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
 SHELL ["/bin/bash", "-c"]
 
 # Shell environment scripts
-RUN cat > /home/${USERNAME}/ros2_env.sh <<'EOF' && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/ros2_env.sh
+RUN cat > /root/ros2_env.sh <<'EOF'
 source /opt/ros/humble/setup.bash
 if [ -f ~/colcon_msgs_ws/install/setup.bash ]; then source ~/colcon_msgs_ws/install/setup.bash; fi
 if [ -f ~/colcon_ws/install/setup.bash ]; then source ~/colcon_ws/install/setup.bash; fi
@@ -26,7 +25,7 @@ alias bridge='bash ~/bridge/cmd.sh'
 EOF
 
 # Bridge environment for ros1_bridge process
-RUN cat > /home/${USERNAME}/bridge_env.sh <<'EOF' && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/bridge_env.sh
+RUN cat > /root/bridge_env.sh <<'EOF'
 source /opt/ros/noetic/setup.bash
 if [ -f ~/catkin_ws/devel/setup.bash ]; then source ~/catkin_ws/devel/setup.bash; fi
 source /opt/ros/humble/setup.bash
@@ -36,15 +35,16 @@ if [ -f ~/colcon_ws/install/setup.bash ]; then source ~/colcon_ws/install/setup.
 :
 EOF
 
-# Add to .bashrc
-RUN echo "source /home/${USERNAME}/ros2_env.sh" >> /home/${USERNAME}/.bashrc && \
-    echo "export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}" >> /home/${USERNAME}/.bashrc
+# Add to .bashrc (orange-colored username for visual distinction from host shell)
+RUN echo "source /root/ros2_env.sh" >> /root/.bashrc && \
+    echo "export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}" >> /root/.bashrc && \
+    echo "export PS1='\[\e[38;5;208m\]\u\[\e[0m\]@\h:\w\\$ '" >> /root/.bashrc
 
 # Bridge scripts (application entry point)
-RUN mkdir -p /home/${USERNAME}/bridge
-COPY --chown=${USERNAME}:${USERNAME} cmd.sh action_bridge_node.py bridge_ros1_helper.py /home/${USERNAME}/bridge/
-RUN chmod +x /home/${USERNAME}/bridge/cmd.sh /home/${USERNAME}/bridge/action_bridge_node.py
+RUN mkdir -p /root/bridge
+COPY cmd.sh action_bridge_node.py bridge_ros1_helper.py /root/bridge/
+RUN chmod +x /root/bridge/cmd.sh /root/bridge/action_bridge_node.py
 
-WORKDIR /home/${USERNAME}
+WORKDIR /root
 
-CMD ["/home/sobits/bridge/cmd.sh"]
+CMD ["/root/bridge/cmd.sh"]

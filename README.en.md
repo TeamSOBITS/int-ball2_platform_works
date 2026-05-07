@@ -197,17 +197,21 @@ $ bash build.sh --msg-build --push
 The directory structure within the container is as follows. Basically, please write development code in `colcon_ws`.
 
 ```sh
-/home
-└── sobits
-    ├── bridge              # ROS Actions bridge, cmd.sh, etc.
-    ├── catkin_ws           # ROS1 environment
-    ├── colcon_msgs_ws      # ROS2 custom messages
-    ├── colcon_ws           # Development code  
-    ├── ros1_bridge_ws      # ROS1/ROS2 bridge
-    ├── ros2_env.sh         # ROS2 environment script (for interactive shell)
-    ├── bridge_env.sh       # ROS1+ROS2 mixed environment script (for bridge process)
-    └── Downloads
+/root
+├── bridge              # ROS Actions bridge, cmd.sh, etc.
+├── catkin_ws           # ROS1 environment
+├── colcon_msgs_ws      # ROS2 custom messages
+├── colcon_ws           # Development code
+├── ros1_bridge_ws      # ROS1/ROS2 bridge
+├── ros2_env.sh         # ROS2 environment script (for interactive shell)
+├── bridge_env.sh       # ROS1+ROS2 mixed environment script (for bridge process)
+└── Downloads
 ```
+
+> [!NOTE]
+> The container runs as the `root` user, so the home directory is `/root` (not `/home/root`).
+> When you enter the interactive shell via `bash exec.sh`, the username (`root`) at the left side of the prompt is displayed in orange to visually distinguish it from your host shell.
+> The bind-mounted `../src` is owned by `root` inside the container, so be mindful of permissions when editing it from the host.
 
 #### About Environment Scripts
 

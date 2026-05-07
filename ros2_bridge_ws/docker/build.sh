@@ -103,9 +103,6 @@ docker_login_ghcr() {
 if [[ "$MODE" == "full" ]]; then
   echo "[build.sh] Building ros1_base locally (this may take 30+ minutes)..."
   docker build \
-    --build-arg USERNAME="${USERNAME}" \
-    --build-arg LOCAL_UID="${LOCAL_UID}" \
-    --build-arg LOCAL_GID="${LOCAL_GID}" \
     --target ros1_base_local \
     -t "${ROS1_BASE_IMAGE}" \
     -f Dockerfile \
@@ -132,9 +129,6 @@ if [[ "$MODE" == "msg-build" ]]; then
   echo "[build.sh] Building msg_bridge_base (this may take 20-30 minutes)..."
   export DOCKER_BUILDKIT=1
   docker build \
-    --build-arg USERNAME="${USERNAME}" \
-    --build-arg LOCAL_UID="${LOCAL_UID}" \
-    --build-arg LOCAL_GID="${LOCAL_GID}" \
     --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
     --build-arg ROS1_BASE_IMAGE="${ROS1_BASE_IMAGE}" \
     --target msg_bridge_base \
@@ -211,9 +205,6 @@ if [[ "$MODE" == "pull" ]]; then
   docker pull "${MSG_BRIDGE_BASE_IMAGE}"
   # Build final layer only using Dockerfile.final (no ros1_base rebuild)
   docker build \
-    --build-arg USERNAME="${USERNAME}" \
-    --build-arg LOCAL_UID="${LOCAL_UID}" \
-    --build-arg LOCAL_GID="${LOCAL_GID}" \
     --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
     --build-arg MSG_BRIDGE_BASE_IMAGE="${MSG_BRIDGE_BASE_IMAGE}" \
     -t "${IMAGE_NAME}" \
@@ -222,9 +213,6 @@ if [[ "$MODE" == "pull" ]]; then
 elif [[ "$MODE" == "full" ]]; then
   # Build final from the locally built msg_bridge_base (full chain in Dockerfile)
   docker build \
-    --build-arg USERNAME="${USERNAME}" \
-    --build-arg LOCAL_UID="${LOCAL_UID}" \
-    --build-arg LOCAL_GID="${LOCAL_GID}" \
     --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
     --target final \
     -t "${IMAGE_NAME}" \

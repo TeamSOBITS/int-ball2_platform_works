@@ -6,13 +6,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        USERNAME: ${USERNAME}
-        LOCAL_UID: ${LOCAL_UID}
-        LOCAL_GID: ${LOCAL_GID}
         ROS_DOMAIN_ID: ${ROS_DOMAIN_ID}
     container_name: ${CONTAINER_NAME}
     privileged: true
-    user: "${LOCAL_UID}:${LOCAL_GID}"
+    user: "0:0"
     network_mode: host
     ipc: host
     shm_size: "1g"
@@ -20,14 +17,14 @@ services:
     command: sleep infinity
     environment:
       - DISPLAY=${DISPLAY}
-      - PULSE_SERVER=unix:/run/user/${LOCAL_UID}/pulse/native
+      - PULSE_SERVER=unix:/run/user/0/pulse/native
       - ROS_MASTER_URI=http://172.17.0.1:11311
       - ROS_IP=${ROS_IP}
     devices:
       - /dev/snd
     volumes:
-      - ${XDG_RUNTIME_DIR}/pulse:/run/user/${LOCAL_UID}/pulse
-      - ../src:/home/${USERNAME}/colcon_ws/src
+      - ${XDG_RUNTIME_DIR}/pulse:/run/user/0/pulse
+      - ../src:/root/colcon_ws/src
       - /dev/bus/usb:/dev/bus/usb
       - /etc/udev/rules.d/:/etc/udev/rules.d/
       - /dev/serial/by-id/:/dev/serial/by-id/

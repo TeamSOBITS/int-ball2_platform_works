@@ -17,4 +17,4 @@ if [ ! "$(docker ps -q -f name=${CONTAINER_NAME})" ]; then
 fi
 
 echo "Entering container: ${CONTAINER_NAME}"
-docker compose -p ${PROJECT_NAME} exec -it --user ${USERNAME} sobits-container /bin/bash
+docker compose -p ${PROJECT_NAME} exec -it --user root sobits-container /bin/bash

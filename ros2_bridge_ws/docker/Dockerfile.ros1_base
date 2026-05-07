@@ -1,10 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM osrf/ros:humble-desktop-full
 
-ARG USERNAME=ros
-ARG LOCAL_UID=1000
-ARG LOCAL_GID=1000
-
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
@@ -45,62 +41,59 @@ RUN add-apt-repository universe && \
     echo "deb http://packages.ros.org/ros/ubuntu focal main" > /etc/apt/sources.list.d/ros-latest.list && \
     curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add -
 
-############################# User setup ##############################
-RUN if ! getent group ${LOCAL_GID} >/dev/null; then groupadd --gid ${LOCAL_GID} ${USERNAME}; fi && \
-    if ! id -u ${USERNAME} >/dev/null 2>&1; then useradd --uid ${LOCAL_UID} --gid ${LOCAL_GID} -m -s /bin/bash ${USERNAME}; fi && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
-
-USER ${USERNAME}
-WORKDIR /home/${USERNAME}
+WORKDIR /root
 
 ############################# ROS1 installation (source build) ##############################
-RUN mkdir -p /home/${USERNAME}/Downloads
-RUN cd /home/${USERNAME}/Downloads && \
+RUN mkdir -p /root/Downloads
+RUN cd /root/Downloads && \
     wget http://archive.ubuntu.com/ubuntu/pool/universe/h/hddtemp/hddtemp_0.3-beta15-53_amd64.deb && \
-    sudo apt-get update -q && \
-    sudo apt-get install -yq ./hddtemp_0.3-beta15-53_amd64.deb
+    apt-get update -q && \
+    apt-get install -yq ./hddtemp_0.3-beta15-53_amd64.deb
 
-RUN cd /home/${USERNAME}/Downloads && \
+RUN cd /root/Downloads && \
     wget https://raw.githubusercontent.com/ros/rosdistro/master/rosdep/base.yaml && \
     sed -i '/focal: \[hddtemp\]/a \    jammy: \[hddtemp\]' base.yaml && \
-    sudo sed -i "s|^yaml .*base.yaml$|yaml file:///home/${USERNAME}/Downloads/base.yaml|" /etc/ros/rosdep/sources.list.d/20-default.list && \
-    sudo rosdep update
+    sed -i "s|^yaml .*base.yaml$|yaml file:///root/Downloads/base.yaml|" /etc/ros/rosdep/sources.list.d/20-default.list && \
+    rosdep update
 
-RUN sudo apt-get update -q && \
-    sudo apt-get install -yq --no-install-recommends liburdfdom-headers-dev liburdfdom-dev && \
-    sudo rm -rf /var/lib/apt/lists/*
+RUN apt-get update -q && \
+    apt-get install -yq --no-install-recommends liburdfdom-headers-dev liburdfdom-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /home/${USERNAME}/catkin_ws && \
-    cd /home/${USERNAME}/catkin_ws && \
+RUN mkdir -p /root/catkin_ws && \
+    cd /root/catkin_ws && \
     rosinstall_generator ros_comm rosconsole_bridge actionlib actionlib_msgs geometry_msgs common_msgs tf2_msgs tf2_geometry_msgs visualization_msgs --rosdistro noetic --deps --tar > noetic-ros_comm.rosinstall && \
     mkdir -p src && \
     vcs import --input noetic-ros_comm.rosinstall ./src && \
-    sudo apt-get update -q && \
-    sudo rosdep install --from-paths ./src --ignore-packages-from-source --rosdistro noetic -y --skip-keys=python3-rospkg
+    apt-get update -q && \
+    rosdep install --from-paths ./src --ignore-packages-from-source --rosdistro noetic -y --skip-keys=python3-rospkg
 
-RUN cd /home/${USERNAME}/catkin_ws/src && \
-    mkdir -p /home/${USERNAME}/Downloads/backup && \
-    if [ -d rosconsole ]; then mv rosconsole /home/${USERNAME}/Downloads/backup/; fi && \
-    if [ -d urdf ]; then mv urdf /home/${USERNAME}/Downloads/backup/; fi && \
+RUN cd /root/catkin_ws/src && \
+    mkdir -p /root/Downloads/backup && \
+    if [ -d rosconsole ]; then mv rosconsole /root/Downloads/backup/; fi && \
+    if [ -d urdf ]; then mv urdf /root/Downloads/backup/; fi && \
     git clone https://github.com/dreuter/rosconsole.git && \
     cd rosconsole && \
     git checkout noetic-jammy && \
-    cd /home/${USERNAME}/catkin_ws/src && \
+    cd /root/catkin_ws/src && \
     git clone https://github.com/dreuter/urdf.git && \
     cd urdf && \
     git checkout set-cxx-version && \
-    cd /home/${USERNAME}/catkin_ws/src
+    cd /root/catkin_ws/src
 
 ############################# gazebo_msgs (ROS1 source) ##############################
-RUN cd /home/${USERNAME}/catkin_ws/src && \
+RUN cd /root/catkin_ws/src && \
     git clone -b noetic-devel https://github.com/ros-simulation/gazebo_ros_pkgs.git && \
     cd gazebo_ros_pkgs && \
     find . -mindepth 1 -maxdepth 1 -type d ! -name gazebo_msgs -exec rm -rf {} +
 
-RUN cd /home/${USERNAME}/catkin_ws && \
-    sudo ./src/catkin/bin/catkin_make_isolated --install --install-space /opt/ros/noetic \
+# Unset ROS env vars inherited from osrf/ros:humble-desktop-full so that the
+# ROS1 Noetic source build does not detect a conflicting humble environment.
+# (The original sobits-user variant relied on `sudo` to wipe these vars.)
+RUN cd /root/catkin_ws && \
+    unset ROS_DISTRO ROS_VERSION ROS_PYTHON_VERSION AMENT_PREFIX_PATH COLCON_PREFIX_PATH && \
+    ./src/catkin/bin/catkin_make_isolated --install --install-space /opt/ros/noetic \
         -DCMAKE_BUILD_TYPE=Release \
         --make-args -j$(nproc)
 
-WORKDIR /home/${USERNAME}
+WORKDIR /root
