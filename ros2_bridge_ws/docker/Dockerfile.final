@@ -37,7 +37,7 @@ EOF
 
 # Add to .bashrc (orange-colored username for visual distinction from host shell)
 RUN echo "source /root/ros2_env.sh" >> /root/.bashrc && \
-    echo "export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}" >> /root/.bashrc && \
+    echo -e "\nrid() {\n    if [ -z \"\$1\" ]; then\n        echo \"現在の ROS_DOMAIN_ID: \$ROS_DOMAIN_ID\"\n    else\n        export ROS_DOMAIN_ID=\$1\n        echo \"ROS_DOMAIN_ID を \$1 に設定しました\"\n    fi\n}" >> ~/.bashrc && source ~/.bashrc && \
     echo "export PS1='\[\e[38;5;208m\]\u\[\e[0m\]@\h:\w\\$ '" >> /root/.bashrc
 
 # Bridge scripts (application entry point)
