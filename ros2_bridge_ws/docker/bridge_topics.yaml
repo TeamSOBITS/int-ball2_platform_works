@@ -76,6 +76,9 @@ topics:
   - topic: /tf_static
     type: tf2_msgs/msg/TFMessage
     queue_size: 100
+    qos:
+      durability: transient_local
+      history: keep_all
   - topic: /joint_states
     type: sensor_msgs/msg/JointState
     queue_size: 10
