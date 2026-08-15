@@ -90,8 +90,7 @@ int-ball2_simulatorとのROS2 bridgeのdocker imageを作成するためのリ�
     - コンテナの名前が被らないようにしてください．
 2. Dockerfileからイメージをビルドします．事前ビルド済みのイメージを ghcr.io から取得するだけなので，**1分ほど**で終わります．
     ```bash
-    $ gh auth login                                    # 未認証の場合のみ
-    $ gh auth refresh -h github.com -s read:packages
+    $ gh auth login --hostname github.com --scopes "read:packages"
     $ gh auth token | docker login ghcr.io -u <GitHubユーザー名> --password-stdin
     $ cd {コンテナPATH}/docker
     $ bash build.sh
