@@ -216,7 +216,18 @@ RUN if id -u ${LOCAL_UID} >/dev/null 2>&1; then \
 # traversing into ANY /root/... path regardless of the subdirectories' own
 # ownership — chmod it to 755 so the chown above actually takes effect
 # (see design.md D4a; there is nothing sensitive directly under /root).
-RUN chown -R ${USERNAME}:${USERNAME} /root/catkin_ws /root/colcon_msgs_ws /root/ros1_bridge_ws /root/colcon_ws && \
+#
+# Only chown the paths actually needed at runtime (devel/install, plus
+# catkin_ws/src which action_bridge_node.py's ROS_PACKAGE_PATH depends on) instead
+# of the full workspace trees. The trees also contain build/ and log/ directories
+# with tens of thousands of intermediate build files that nothing reads at runtime;
+# chown -R over the parent dirs made overlayfs walk through those (now measured at
+# ~70s), while targeting the needed paths directly takes ~9s for the same result.
+RUN chown -R ${USERNAME}:${USERNAME} \
+        /root/catkin_ws/devel /root/catkin_ws/src \
+        /root/colcon_msgs_ws/install \
+        /root/ros1_bridge_ws/install \
+        /root/colcon_ws && \
     chmod 755 /root
 
 # Symlink the workspaces into the development user's home so `ls ~` reveals them
