@@ -47,6 +47,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         cmake \
         python3-empy \
         python3-defusedxml \
+        python3-pip \
         python3-rosdep \
         python3-rosinstall-generator \
         python3-vcstools \
@@ -189,46 +190,100 @@ RUN mkdir -p /root/colcon_ws/src
 FROM msg_bridge_base AS final
 
 ARG ROS_DOMAIN_ID=0
+ARG USERNAME=sobits
+ARG LOCAL_UID=1000
+ARG LOCAL_GID=1000
+ARG CONTAINER_NAME=ros2_bridge_ws
 
 ENV ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
 
 SHELL ["/bin/bash", "-c"]
 
-# Shell environment scripts
+# Create a non-root user matching the host's UID/GID, with its own home directory
+# separate from /root (see design.md D2: sharing /root with the real root account
+# used by `exec.sh --root` would cause dotfile ownership churn between the two).
+RUN if id -u ${LOCAL_UID} >/dev/null 2>&1; then \
+        EXISTING_USER=$(id -nu ${LOCAL_UID}); \
+        userdel -r ${EXISTING_USER} 2>/dev/null || true; \
+    fi && \
+    useradd --create-home --home-dir /home/${USERNAME} --shell /bin/bash --user-group -u ${LOCAL_UID} ${USERNAME} && \
+    groupmod -g ${LOCAL_GID} -o ${USERNAME} && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Hand the existing workspaces (built as root in Layer1/2) over to the new user.
+# Physical location stays at /root/... (see design.md D3) — only ownership changes.
+# /root itself defaults to drwx------ (700), which blocks the new user from
+# traversing into ANY /root/... path regardless of the subdirectories' own
+# ownership — chmod it to 755 so the chown above actually takes effect
+# (see design.md D4a; there is nothing sensitive directly under /root).
+RUN chown -R ${USERNAME}:${USERNAME} /root/catkin_ws /root/colcon_msgs_ws /root/ros1_bridge_ws /root/colcon_ws && \
+    chmod 755 /root
+
+# Symlink the workspaces into the development user's home so `ls ~` reveals them
+# directly (matching docker_ws, where colcon_ws lives right under ~). Without this,
+# colcon_ws is invisible from the user's own home directory — you would only find it
+# by knowing to `cd /root/colcon_ws` or by using the cb/bridge aliases.
+RUN ln -s /root/colcon_ws /home/${USERNAME}/colcon_ws && \
+    ln -s /root/catkin_ws /home/${USERNAME}/catkin_ws && \
+    ln -s /root/colcon_msgs_ws /home/${USERNAME}/colcon_msgs_ws && \
+    ln -s /root/ros1_bridge_ws /home/${USERNAME}/ros1_bridge_ws && \
+    ln -s /root/bridge /home/${USERNAME}/bridge && \
+    chown -h ${USERNAME}:${USERNAME} /home/${USERNAME}/colcon_ws /home/${USERNAME}/catkin_ws /home/${USERNAME}/colcon_msgs_ws /home/${USERNAME}/ros1_bridge_ws /home/${USERNAME}/bridge
+
+# Shell environment scripts.
+# Workspace paths are absolute (/root/...) rather than ~-relative, because the
+# workspaces physically live under /root while the new user's $HOME is /home/${USERNAME}
+# (see design.md D3).
 RUN cat > /root/ros2_env.sh <<'EOF'
 source /opt/ros/humble/setup.bash
-if [ -f ~/colcon_msgs_ws/install/setup.bash ]; then source ~/colcon_msgs_ws/install/setup.bash; fi
-if [ -f ~/colcon_ws/install/setup.bash ]; then source ~/colcon_ws/install/setup.bash; fi
+if [ -f /root/colcon_msgs_ws/install/setup.bash ]; then source /root/colcon_msgs_ws/install/setup.bash; fi
+if [ -f /root/colcon_ws/install/setup.bash ]; then source /root/colcon_ws/install/setup.bash; fi
 source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 export ROS_MASTER_URI=${ROS_MASTER_URI:-http://localhost:11311}
-alias cb='CURRENT_DIR=`pwd` && cd ~/colcon_ws/ && colcon build --symlink-install && source ~/.bashrc && cd ${CURRENT_DIR}'
-alias bridge='bash ~/bridge/cmd.sh'
+alias cb='CURRENT_DIR=`pwd` && cd /root/colcon_ws/ && colcon build --symlink-install && source ~/.bashrc && cd ${CURRENT_DIR}'
+alias bridge='bash /root/bridge/cmd.sh'
 # To use ros1_bridge or ROS1 msgs interactively, source bridge_env.sh:
 #   source ~/bridge_env.sh
 :
 EOF
 
-# Bridge environment for ros1_bridge process
+# Bridge environment for ros1_bridge process (same absolute-path rationale as above).
 RUN cat > /root/bridge_env.sh <<'EOF'
 source /opt/ros/noetic/setup.bash
-if [ -f ~/catkin_ws/devel/setup.bash ]; then source ~/catkin_ws/devel/setup.bash; fi
+if [ -f /root/catkin_ws/devel/setup.bash ]; then source /root/catkin_ws/devel/setup.bash; fi
 source /opt/ros/humble/setup.bash
-if [ -f ~/colcon_msgs_ws/install/setup.bash ]; then source ~/colcon_msgs_ws/install/setup.bash; fi
-if [ -f ~/ros1_bridge_ws/install/setup.bash ]; then source ~/ros1_bridge_ws/install/setup.bash; fi
-if [ -f ~/colcon_ws/install/setup.bash ]; then source ~/colcon_ws/install/setup.bash; fi
+if [ -f /root/colcon_msgs_ws/install/setup.bash ]; then source /root/colcon_msgs_ws/install/setup.bash; fi
+if [ -f /root/ros1_bridge_ws/install/setup.bash ]; then source /root/ros1_bridge_ws/install/setup.bash; fi
+if [ -f /root/colcon_ws/install/setup.bash ]; then source /root/colcon_ws/install/setup.bash; fi
 :
 EOF
 
-# Add to .bashrc (orange-colored username for visual distinction from host shell)
+# .bashrc for the non-root development user (default interactive shell).
+# PS1 tags the container name so the host shell and container shell are visually
+# distinguishable even though network_mode: host means the hostname (\h) is identical.
+RUN echo "source /root/ros2_env.sh" >> /home/${USERNAME}/.bashrc && \
+    echo "export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}" >> /home/${USERNAME}/.bashrc && \
+    echo -e "\nrid() {\n    if [ -z \"\$1\" ]; then\n        echo \"現在の ROS_DOMAIN_ID: \$ROS_DOMAIN_ID\"\n    else\n        export ROS_DOMAIN_ID=\$1\n        echo \"ROS_DOMAIN_ID を \$1 に設定しました\"\n    fi\n}" >> /home/${USERNAME}/.bashrc && \
+    echo "export PS1='\[\e[1;33;40m\]${CONTAINER_NAME}\[\e[0m\] \[\033[01;32m\]\u@\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '" >> /home/${USERNAME}/.bashrc && \
+    echo "cd ~/colcon_ws" >> /home/${USERNAME}/.bashrc && \
+    chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
+
+# Same content for the root shell (used only via `exec.sh --root` as an admin escape
+# hatch, see design.md D7/D10) — kept as a separate file so editing one does not
+# affect the other. Username is colored orange here to flag that this is a root shell.
 RUN echo "source /root/ros2_env.sh" >> /root/.bashrc && \
     echo "export ROS_DOMAIN_ID=${ROS_DOMAIN_ID}" >> /root/.bashrc && \
-    echo "export PS1='\[\e[38;5;208m\]\u\[\e[0m\]@\h:\w\\$ '" >> /root/.bashrc
+    echo -e "\nrid() {\n    if [ -z \"\$1\" ]; then\n        echo \"現在の ROS_DOMAIN_ID: \$ROS_DOMAIN_ID\"\n    else\n        export ROS_DOMAIN_ID=\$1\n        echo \"ROS_DOMAIN_ID を \$1 に設定しました\"\n    fi\n}" >> /root/.bashrc && \
+    echo "export PS1='\[\e[1;33;40m\]${CONTAINER_NAME}\[\e[0m\] \[\e[38;5;208m\]\u\[\e[0m\]@\h:\w\\$ '" >> /root/.bashrc
 
-# Bridge scripts (application entry point)
+# Bridge scripts (application entry point). These stay under /root/bridge since the
+# bridge process itself is launched as the mapped user via docker-compose `user:`
+# and cmd.sh already references /root/... via absolute paths (unchanged).
 RUN mkdir -p /root/bridge
-COPY cmd.sh action_bridge_node.py bridge_ros1_helper.py /root/bridge/
+COPY cmd.sh action_bridge_node.py bridge_ros1_helper.py bridge_topics.yaml /root/bridge/
 RUN chmod +x /root/bridge/cmd.sh /root/bridge/action_bridge_node.py
 
-WORKDIR /root
+WORKDIR /home/${USERNAME}
+USER ${USERNAME}
 
 CMD ["/root/bridge/cmd.sh"]

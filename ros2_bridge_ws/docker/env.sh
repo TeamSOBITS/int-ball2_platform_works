@@ -19,7 +19,7 @@ export IMAGE_MSG_BRIDGE_BASE="ghcr.io/teamsobits/msg_bridge_base:latest"
 # --- Do not modify below this line ---
 
 # -- User and Group IDs --
-export USERNAME="root"
+export USERNAME=$(whoami)
 export LOCAL_UID=$(id -u)
 export LOCAL_GID=$(id -g)
 

@@ -30,6 +30,7 @@
         <li><a href="#building-the-container">Building the Container</a></li>
         <li><a href="#how-to-run-and-operate-the-container">How to Run and Operate the Container</a></li>
         <li><a href="#directory-structure-in-the-container">Directory structure in the container</a></li>
+        <li><a href="#advanced-build-modes">Advanced Build Modes</a></li>
       </ul>
     </li>
     <li><a href="#milestone">Milestone</a></li>
@@ -37,12 +38,12 @@
   </ol>
 </details>
 
-## Introduction
+## Overview
 This repository is for creating a docker image of the ROS2 bridge with int-ball2_simulator.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Getting Started
+## Setup
 
 This section describes how to set up this repository.
 
@@ -81,93 +82,25 @@ First, prepare the following environment before proceeding to the next installat
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Launch and Usage
+## Usage
 
 ### Building the Container
 1. Copy the `ros2_bridge_ws` directory and paste it into your Home directory or elsewhere.
     - At this time, change the name of the duplicated folder.
     - Example: `ros2_bridge_ws` → `my_new_ws`
     - Ensure that container names do not overlap.
-2. Build the image from the Dockerfile.
+2. Build the image from the Dockerfile. Since it only pulls a pre-built image from ghcr.io, this takes **about 1 minute**.
+    ```bash
+    $ gh auth login                                    # only if not already authenticated
+    $ gh auth refresh -h github.com -s read:packages
+    $ gh auth token | docker login ghcr.io -u <your GitHub username> --password-stdin
+    $ cd {container_PATH}/docker
+    $ bash build.sh
+    ```
+    > [!NOTE]
+    > If you get a `denied` error, you don't have access to the `teamsobits` organization's packages. Please ask a repository administrator for an invite.
 
-#### Build Modes
-
-The Docker image has a 3-layer structure:
-- **Layer 1 (ros1_base)**: OS + ROS1 Noetic + ROS2 Humble foundation (shared on ghcr.io)
-- **Layer 2 (msg_bridge_base)**: Custom messages + pre-built ros1_bridge (shared on ghcr.io)
-- **Layer 3 (final)**: Application scripts (local build)
-
-`build.sh` supports 4 build modes:
-
-##### 1. `--pull` (default - recommended)
-Pulls the pre-built `msg_bridge_base` and builds only the application layer locally. **Fastest** (about 1 minute or less) and ideal for daily development.
-```bash
-$ cd {container_PATH}/docker
-$ bash build.sh
-# or
-$ bash build.sh --pull
-```
-
-##### 2. `--msg-build`
-Used when message definitions are updated. Builds message definitions and ros1_bridge from `ros1_base`, generating a new `msg_bridge_base` (20-30 minutes).
-```bash
-$ cd {container_PATH}/docker
-$ bash build.sh --msg-build
-```
-
-##### 3. `--msg-build --push`
-Same as `--msg-build`, but pushes the new `msg_bridge_base` to ghcr.io after building. **When one team member runs this command after updating messages**, other members can build quickly using `--pull`. GitHub authentication required (described below).
-```bash
-$ cd {container_PATH}/docker
-$ GITHUB_USER=<username> GITHUB_TOKEN=<token> bash build.sh --msg-build --push
-```
-
-##### 4. `--full`
-Completely builds ros1_base locally, then builds messages and ros1_bridge. Use for full environment validation or when customization is needed (40-60 minutes or more).
-```bash
-$ cd {container_PATH}/docker
-$ bash build.sh --full
-```
-
-##### 5. `--full --push`
-Same as `--full`, but pushes `ros1_base` to ghcr.io after building. Use when making major foundational changes, such as ROS version updates. GitHub authentication required.
-```bash
-$ cd {container_PATH}/docker
-$ GITHUB_USER=<username> GITHUB_TOKEN=<token> bash build.sh --full --push
-```
-
-#### Recommended Build Workflow
-
-| Situation | Command | Time |
-|-----------|---------|------|
-| Regular development | `bash build.sh --pull` | ~1 minute |
-| Update message definitions (maintainer) | `bash build.sh --msg-build --push` | ~30 minutes |
-| Update message definitions (other members) | `bash build.sh --pull` | ~1 minute |
-| Full environment validation | `bash build.sh --full` | ~60 minutes |
-
-#### GitHub Personal Access Token Setup (required only for `--push`)
-
-To push images to ghcr.io, a GitHub Personal Access Token (PAT) is required:
-
-1. Visit [GitHub Settings - Personal access tokens](https://github.com/settings/tokens)
-2. Click "Generate new token" → "Generate new token (classic)"
-3. Enter a token name (e.g., `ghcr-push-token`)
-4. Set an expiration date
-5. Select `write:packages` in scopes
-6. Click "Generate token" and copy it
-
-Set as environment variables and run:
-```bash
-$ export GITHUB_USER=<GitHub username>
-$ export GITHUB_TOKEN=<copied token>
-$ cd {container_PATH}/docker
-$ bash build.sh --msg-build --push
-```
-
-> [!NOTE]
-> - When using `--push`, always use it together with `--msg-build` or `--full`
-> - You can persist GitHub PAT by setting it as environment variables or adding to `.bashrc`
-> - Periodically check the expiration date of your PAT and update if necessary
+    For advanced build modes intended for maintainers (updating message definitions, full local builds, etc.), see [Advanced Build Modes](#advanced-build-modes).
 
 3. Start the container from the image.
     ```bash
@@ -179,6 +112,11 @@ $ bash build.sh --msg-build --push
     $ bash exec.sh
     # >> {container_name} username@:~$　← changes to this display
     ```
+    By default this enters the shell as the same user (UID/GID) as the host. If you need a root shell for system-wide administrative tasks (e.g. `apt` operations), you can switch to one:
+    ```bash
+    $ bash exec.sh --root
+    ```
+    If you want quick access to attach to the running container from the host side, append the contents of [docs/dock.sh](docs/dock.sh) to your **host's** `~/.bashrc` (not the container's) — this is a personal setting outside this repository's management scope.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ### How to Run and Operate the Container
@@ -190,38 +128,74 @@ $ bash build.sh --msg-build --push
 3. Start the bridge with the following command.
     ```sh
     bash ~/bridge/cmd.sh
+    # or, using the alias
+    bridge
     ```
+
+The following functions/aliases are already defined in the container's `.bashrc`:
+- **`rid [ID]`**: Check/set `ROS_DOMAIN_ID`. Shows the current value when called with no argument; sets it to the given value otherwise.
+- **`bridge`**: Alias for `bash /root/bridge/cmd.sh` (shortcut for step 3).
+- **`cb`**: Runs `colcon build --symlink-install` in `colcon_ws` and reloads `.bashrc`. Use this after changing development code.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ### Directory structure in the container
-The directory structure within the container is as follows. Basically, please write development code in `colcon_ws`.
+The development user's home directory in the container is `/home/<host username>`. See below for where development code is placed.
 
 ```sh
-/root
+/home/<username>
+├── .bashrc             # ROS2 environment, rid function, cb/bridge aliases, etc.
+├── colcon_ws -> /root/colcon_ws              # symlink
+├── catkin_ws -> /root/catkin_ws              # symlink
+├── colcon_msgs_ws -> /root/colcon_msgs_ws    # symlink
+├── ros1_bridge_ws -> /root/ros1_bridge_ws    # symlink
+└── bridge -> /root/bridge                    # symlink
+
+/root                    # Workspaces physically live here (ownership chowned to you, linked above)
 ├── bridge              # ROS Actions bridge, cmd.sh, etc.
 ├── catkin_ws           # ROS1 environment
 ├── colcon_msgs_ws      # ROS2 custom messages
-├── colcon_ws           # Development code
+├── colcon_ws           # Development code (host's ../src is bind-mounted here)
 ├── ros1_bridge_ws      # ROS1/ROS2 bridge
 ├── ros2_env.sh         # ROS2 environment script (for interactive shell)
 ├── bridge_env.sh       # ROS1+ROS2 mixed environment script (for bridge process)
 └── Downloads
 ```
 
-> [!NOTE]
-> The container runs as the `root` user, so the home directory is `/root` (not `/home/root`).
-> When you enter the interactive shell via `bash exec.sh`, the username (`root`) at the left side of the prompt is displayed in orange to visually distinguish it from your host shell.
-> The bind-mounted `../src` is owned by `root` inside the container, so be mindful of permissions when editing it from the host.
+Please place development code under the host's `ros2_bridge_ws/src/` (at the same level as `docker/`).
 
 #### About Environment Scripts
 
-- **`ros2_env.sh`**: Automatically sourced in interactive shell (`bash exec.sh`). Provides a pure ROS2 environment without ROS1 paths mixed in, ensuring accurate Python package resolution.
+- **`ros2_env.sh`**: Automatically sourced in the interactive shell (`bash exec.sh`). Provides a pure ROS2 environment without ROS1 paths mixed in, ensuring accurate Python package resolution.
 - **`bridge_env.sh`**: Used only in the ROS1/ROS2 bridge process (`cmd.sh`). Sets up both ROS1 and ROS2 environments to enable mutual translation of custom messages.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### Advanced Build Modes
+The Docker image has a 3-layer structure:
+- **Layer 1 (ros1_base)**: OS + ROS1 Noetic + ROS2 Humble foundation (shared on ghcr.io)
+- **Layer 2 (msg_bridge_base)**: Custom messages + pre-built ros1_bridge (shared on ghcr.io)
+- **Layer 3 (final)**: Application scripts (local build)
+
+| Mode | Command | Purpose | Time | Auth |
+|---|---|---|---|---|
+| `--pull` (default) | `bash build.sh` | Regular development | ~1 minute | pull auth (above) |
+| `--msg-build` | `bash build.sh --msg-build` | Build when message definitions are updated | 20-30 min | pull auth (above) |
+| `--msg-build --push` | `GITHUB_USER=$(gh api user --jq .login) GITHUB_TOKEN=$(gh auth token) bash build.sh --msg-build --push` | Share the updated `msg_bridge_base` on ghcr.io (maintainers) | 20-30 min | `write:packages` additionally required |
+| `--full` | `bash build.sh --full` | Full environment validation/customization | 40-60 min | none (fully local build) |
+| `--full --push` | `GITHUB_USER=$(gh api user --jq .login) GITHUB_TOKEN=$(gh auth token) bash build.sh --full --push` | Share `ros1_base` foundation updates on ghcr.io (maintainers) | 40-60 min+ | `write:packages` additionally required |
+
+> [!NOTE]
+> - `--push` cannot be used on its own; always use it together with `--msg-build` or `--full`.
+> - If you need `write:packages`, run `gh auth refresh -h github.com -s write:packages` beforehand.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Milestone
 Please visit the [Issue page][issues-url] to check for current bugs or requests for new features.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 ### References
 - Official website: [Docker Docs](https://docs.docker.com/)

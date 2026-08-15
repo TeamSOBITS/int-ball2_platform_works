@@ -29,6 +29,7 @@
         <li><a href="#コンテナのビルド方法">コンテナのビルド方法</a></li>
         <li><a href="#コンテナの実行・操作方法">コンテナの実行・操作方法</a></li>
         <li><a href="#コンテナ内のディレクトリ構造">コンテナ内のディレクトリ構造</a></li>
+        <li><a href="#高度なビルドモード">高度なビルドモード</a></li>
       </ul>
     </li>
     <li><a href="#マイルストーン">マイルストーン</a></li>
@@ -87,86 +88,18 @@ int-ball2_simulatorとのROS2 bridgeのdocker imageを作成するためのリ�
     - この際，複製されたフォルダの名前を変更してください．
     - 例: `ros2_bridge_ws` → `my_new_ws`
     - コンテナの名前が被らないようにしてください．
-2. Dockerfileからイメージをビルドします.
+2. Dockerfileからイメージをビルドします．事前ビルド済みのイメージを ghcr.io から取得するだけなので，**1分ほど**で終わります．
+    ```bash
+    $ gh auth login                                    # 未認証の場合のみ
+    $ gh auth refresh -h github.com -s read:packages
+    $ gh auth token | docker login ghcr.io -u <GitHubユーザー名> --password-stdin
+    $ cd {コンテナPATH}/docker
+    $ bash build.sh
+    ```
+    > [!NOTE]
+    > `denied` エラーが出る場合，`teamsobits` 組織のパッケージへのアクセス権がありません．リポジトリ管理者に招待を依頼してください．
 
-#### ビルドモード
-
-Docker イメージは3層構造になっています：
-- **Layer 1 (ros1_base)**: OS + ROS1 Noetic + ROS2 Humble 基盤（ghcr.io で共有）
-- **Layer 2 (msg_bridge_base)**: カスタムメッセージ + ros1_bridge ビルド済み（ghcr.io で共有）
-- **Layer 3 (final)**: アプリケーションスクリプト（ローカルビルド）
-
-`build.sh`は4つのビルドモードをサポートしています：
-
-##### 1. `--pull`（デフォルト - 推奨）
-事前ビルドされた `msg_bridge_base` をプルして，アプリケーション層のみをローカルビルドします．**最も高速**（約1分以内）で，日常開発に最適です．
-```bash
-$ cd {コンテナPATH}/docker
-$ bash build.sh
-# または
-$ bash build.sh --pull
-```
-
-##### 2. `--msg-build`
-メッセージ定義を更新した際に使用します． `ros1_base` からメッセージ定義と ros1_bridge をビルドし，新しい `msg_bridge_base` を生成します（20-30分）．
-```bash
-$ cd {コンテナPATH}/docker
-$ bash build.sh --msg-build
-```
-
-##### 3. `--msg-build --push`
-`--msg-build` と同じですが，ビルド完了後に新しい `msg_bridge_base` を ghcr.io にプッシュします．**チームメンバーがメッセージを更新した場合，メンテナー1名がこのコマンドを実行**することで，他のメンバーは `--pull` で高速にビルドできるようになります．GitHub 認証が必要です（後述）．
-```bash
-$ cd {コンテナPATH}/docker
-$ GITHUB_USER=<ユーザー名> GITHUB_TOKEN=<トークン> bash build.sh --msg-build --push
-```
-
-##### 4. `--full`
-ros1_base をローカルで完全ビルドしてから，メッセージと ros1_bridge をビルドします．環境の完全検証やカスタマイズが必要な場合に使用します（40-60分以上）．
-```bash
-$ cd {コンテナPATH}/docker
-$ bash build.sh --full
-```
-
-##### 5. `--full --push`
-`--full` と同じですが，完了後に `ros1_base` を ghcr.io にプッシュします．ROS のバージョン更新など，基盤を大きく変更した場合に使用します．GitHub 認証が必要です．
-```bash
-$ cd {コンテナPATH}/docker
-$ GITHUB_USER=<ユーザー名> GITHUB_TOKEN=<トークン> bash build.sh --full --push
-```
-
-#### 推奨されるビルドフロー
-
-| 状況 | コマンド | 時間 |
-|------|---------|------|
-| 通常の開発 | `bash build.sh --pull` | ~1分 |
-| メッセージ定義を更新（メンテナー） | `bash build.sh --msg-build --push` | ~30分 |
-| メッセージ定義を更新（他のメンバー） | `bash build.sh --pull` | ~1分 |
-| 環境の完全検証 | `bash build.sh --full` | ~60分 |
-
-#### GitHub Personal Access Token の設定（`--push` を使用する場合）
-
-ghcr.io にイメージをプッシュするには，GitHub Personal Access Token（PAT）が必要です：
-
-1. [GitHub Settings - Personal access tokens](https://github.com/settings/tokens)にアクセスします
-2. "Generate new token" → "Generate new token (classic)"をクリックします
-3. トークンの名前を入力します（例：`ghcr-push-token`）
-4. 有効期限を設定します
-5. スコープで`write:packages`を選択します
-6. "Generate token"をクリックしてトークンをコピーします
-
-環境変数として設定して実行します：
-```bash
-$ export GITHUB_USER=<GitHubユーザー名>
-$ export GITHUB_TOKEN=<コピーしたトークン>
-$ cd {コンテナPATH}/docker
-$ bash build.sh --msg-build --push
-```
-
-> [!NOTE]
-> - `--push` を使用する場合は必ず `--msg-build` または `--full` と一緒に使用してください
-> - GitHub PAT は環境変数として設定するか，`.bashrc` に追加することで永続化できます
-> - PAT の有効期限を定期的に確認し，必要に応じて更新してください
+    メッセージ定義の更新や完全ローカルビルドなど，メンテナー向けの高度なビルドモードは[こちら](#高度なビルドモード)を参照してください．
 
 3. イメージからコンテナを起動します．
     ```bash
@@ -178,6 +111,11 @@ $ bash build.sh --msg-build --push
     $ bash exec.sh
     # >> {コンテナ名} username@:~$　← この表示に切り替わる
     ```
+    既定ではホストと同じユーザー (UID/GID) でシェルに入ります．`apt` 操作などシステム全体に関わる管理作業が必要な場合は，`root` シェルに切り替えられます．
+    ```bash
+    $ bash exec.sh --root
+    ```
+    ホスト側で実行中のコンテナへ手早くアタッチしたい場合は，[docs/dock.sh](docs/dock.sh) の内容を各自の**ホストの** `~/.bashrc`（コンテナ内ではありません）に追記してください（本リポジトリの管理対象外の個人設定です）．
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ### コンテナの実行・操作方法
@@ -189,33 +127,66 @@ $ bash build.sh --msg-build --push
 3. 以下のコマンドでブリッジを起動する．
     ```sh
     bash ~/bridge/cmd.sh
+    # または、エイリアスで
+    bridge
     ```
+
+コンテナ内の`.bashrc`には，以下の関数・エイリアスが定義済みです：
+- **`rid [ID]`**: `ROS_DOMAIN_ID`の確認・設定．引数なしで現在値を表示，引数を渡すとその値に設定します．
+- **`bridge`**: `bash /root/bridge/cmd.sh`のエイリアス（手順3のショートカット）．
+- **`cb`**: `colcon_ws`で`colcon build --symlink-install`を実行し，`.bashrc`を再読み込みします．開発コードを変更した際に使用します．
+
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ### コンテナ内のディレクトリ構造
-コンテナ内のディレクトリ構造は以下の様になっています．基本的に開発コードは`colcon_ws`内に記述してください．
+コンテナ内の開発ユーザーのホームディレクトリは `/home/<ホストのユーザー名>` です．開発コードの配置場所は下記を参照してください．
 
 ```sh
-/root
+/home/<username>
+├── .bashrc             # ROS2環境の読み込み、rid関数、cb/bridgeエイリアスなど
+├── colcon_ws -> /root/colcon_ws              # シンボリックリンク
+├── catkin_ws -> /root/catkin_ws              # シンボリックリンク
+├── colcon_msgs_ws -> /root/colcon_msgs_ws    # シンボリックリンク
+├── ros1_bridge_ws -> /root/ros1_bridge_ws    # シンボリックリンク
+└── bridge -> /root/bridge                    # シンボリックリンク
+
+/root                    # ワークスペースの実体はここに置かれています (chown 済み、上記のリンク先)
 ├── bridge              # ROS Actionのブリッジ、cmd.shなど
 ├── catkin_ws           # ROS1環境
 ├── colcon_msgs_ws      # ROS2カスタムメッセージ
-├── colcon_ws           # 開発コード
+├── colcon_ws           # 開発コード (ホストの ../src がここにbind mountされる)
 ├── ros1_bridge_ws      # ROS1/ROS2ブリッジ
 ├── ros2_env.sh         # ROS2環境スクリプト（対話型シェル用）
 ├── bridge_env.sh       # ROS1+ROS2混合環境スクリプト（ブリッジプロセス用）
 └── Downloads
 ```
 
-> [!NOTE]
-> コンテナは `root` ユーザーで実行されるため，ホームディレクトリは `/home/root` ではなく `/root` です．
-> `bash exec.sh` で対話シェルに入ると，プロンプト左端のユーザー名 (`root`) がオレンジ色で表示され，ホスト側のシェルと視覚的に区別できます．
-> bind mount された `../src` はコンテナ内で root 所有になるため，ホスト側で編集する際は権限に注意してください．
+開発コードはホスト側の `ros2_bridge_ws/src/`（`docker/`と同階層）に配置してください．
 
 #### 環境スクリプトについて
 
 - **`ros2_env.sh`**: 対話的なシェル（`bash exec.sh`）で自動的にソースされます．純粋なROS2環境を提供し，ROS1のパスが混在していないため，Pythonパッケージの解決が正確です．
 - **`bridge_env.sh`**: ROS1/ROS2ブリッジプロセス（`cmd.sh`）でのみ使用されます．ROS1とROS2の両方の環境をセットアップして，カスタムメッセージの相互翻訳を可能にします．
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+
+### 高度なビルドモード
+Docker イメージは3層構造になっています：
+- **Layer 1 (ros1_base)**: OS + ROS1 Noetic + ROS2 Humble 基盤（ghcr.io で共有）
+- **Layer 2 (msg_bridge_base)**: カスタムメッセージ + ros1_bridge ビルド済み（ghcr.io で共有）
+- **Layer 3 (final)**: アプリケーションスクリプト（ローカルビルド）
+
+| モード | コマンド | 用途 | 時間 | 認証 |
+|---|---|---|---|---|
+| `--pull`（デフォルト） | `bash build.sh` | 通常の開発 | ~1分 | pull認証（前述） |
+| `--msg-build` | `bash build.sh --msg-build` | メッセージ定義を更新した際のビルド | 20-30分 | pull認証（前述） |
+| `--msg-build --push` | `GITHUB_USER=$(gh api user --jq .login) GITHUB_TOKEN=$(gh auth token) bash build.sh --msg-build --push` | 更新した`msg_bridge_base`をghcr.ioに共有（メンテナー用） | 20-30分 | `write:packages`が追加で必要 |
+| `--full` | `bash build.sh --full` | 環境の完全検証・カスタマイズ | 40-60分 | 不要（全てローカルビルド） |
+| `--full --push` | `GITHUB_USER=$(gh api user --jq .login) GITHUB_TOKEN=$(gh auth token) bash build.sh --full --push` | `ros1_base`の基盤更新をghcr.ioに共有（メンテナー用） | 40-60分+ | `write:packages`が追加で必要 |
+
+> [!NOTE]
+> - `--push`は単独では使えず，必ず`--msg-build`または`--full`と一緒に使用します．
+> - `write:packages`が必要な場合は事前に`gh auth refresh -h github.com -s write:packages`を実行してください．
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 

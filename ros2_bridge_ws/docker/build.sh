@@ -204,16 +204,28 @@ if [[ "$MODE" == "pull" ]]; then
   echo "[build.sh] Pulling ${MSG_BRIDGE_BASE_IMAGE}..."
   docker pull "${MSG_BRIDGE_BASE_IMAGE}"
   # Build final layer only using Dockerfile.final (no ros1_base rebuild)
+  # NOTE: this stage bakes in the host's UID/GID/username and must never be pushed
+  # to a registry (see design.md D11) — it is intentionally excluded from --push.
   docker build \
     --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
     --build-arg MSG_BRIDGE_BASE_IMAGE="${MSG_BRIDGE_BASE_IMAGE}" \
+    --build-arg USERNAME="${USERNAME}" \
+    --build-arg LOCAL_UID="${LOCAL_UID}" \
+    --build-arg LOCAL_GID="${LOCAL_GID}" \
+    --build-arg CONTAINER_NAME="${CONTAINER_NAME}" \
     -t "${IMAGE_NAME}" \
     -f Dockerfile.final \
     .
 elif [[ "$MODE" == "full" ]]; then
   # Build final from the locally built msg_bridge_base (full chain in Dockerfile)
+  # NOTE: this stage bakes in the host's UID/GID/username and must never be pushed
+  # to a registry (see design.md D11) — it is intentionally excluded from --push.
   docker build \
     --build-arg ROS_DOMAIN_ID="${ROS_DOMAIN_ID}" \
+    --build-arg USERNAME="${USERNAME}" \
+    --build-arg LOCAL_UID="${LOCAL_UID}" \
+    --build-arg LOCAL_GID="${LOCAL_GID}" \
+    --build-arg CONTAINER_NAME="${CONTAINER_NAME}" \
     --target final \
     -t "${IMAGE_NAME}" \
     -f Dockerfile \
